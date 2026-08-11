@@ -1,0 +1,483 @@
+/* ==============================================
+   V-MILLION - Marcadores do Mapa
+   ============================================== */
+
+:root {
+  --kg-primary: #003893;
+  --kg-primary-dark: #002a6e;
+  --kg-accent: #00B4D8;
+  --kg-cta: #F7D116;
+  --kg-danger: #CF2027;
+  --kg-success: #10B981;
+  --kg-warning: #F59E0B;
+  --kg-text: #0f172a;
+  --kg-white: #ffffff;
+  --shadow-marker: 0 4px 12px rgba(0, 0, 0, 0.25);
+  --radius-full: 9999px;
+}
+
+.kg-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  contain: layout style paint;
+}
+
+.kg-marker:hover { transform: scale(1.12); z-index: 10; }
+.kg-marker:active { transform: scale(0.96); }
+
+/* 1. Ponto de Partida */
+.kg-marker--ponto {
+  width: 28px; height: 28px;
+  background: var(--kg-primary);
+  border: 3px solid var(--kg-white);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-marker);
+}
+.kg-marker--ponto::after {
+  content: "";
+  position: absolute;
+  width: 10px; height: 10px;
+  background: var(--kg-white);
+  border-radius: var(--radius-full);
+}
+/* Editor de mapa do admin: cor por estado de aprovação (aprovado fica com
+   a cor primária por omissão, sem classe extra). */
+.kg-marker--ponto.pendente { background: var(--kg-warning); }
+.kg-marker--ponto.recusado { background: var(--kg-danger); opacity: 0.6; }
+
+/* 2. Parque */
+.kg-marker--parque {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  border: 2.5px solid var(--kg-white);
+  box-shadow: var(--shadow-marker);
+  font-weight: 800; font-size: 15px;
+  color: var(--kg-white);
+  font-family: 'Inter', system-ui, sans-serif;
+}
+.kg-marker--parque.livre { background: var(--kg-success); }
+.kg-marker--parque.poucas { background: var(--kg-warning); }
+.kg-marker--parque.cheio { background: var(--kg-danger); }
+.kg-marker--parque::before { content: "P"; }
+
+/* 3. Veículo */
+.kg-marker--veiculo {
+  width: 42px; height: 42px;
+  background: var(--kg-white);
+  border-radius: 12px;
+  border: 2.5px solid var(--kg-primary);
+  box-shadow: var(--shadow-marker);
+  overflow: hidden;
+}
+.kg-marker--veiculo.na-fila {
+  border-color: var(--kg-cta);
+  box-shadow: 0 0 0 3px rgba(247, 209, 22, 0.35), var(--shadow-marker);
+}
+.kg-marker--veiculo.em-movimento { border-color: var(--kg-accent); }
+.kg-marker--veiculo.partiu { border-color: var(--kg-accent); opacity: 0.65; }
+.kg-marker--veiculo.chegou { border-color: var(--kg-success); }
+.kg-marker--veiculo .lugares {
+  position: absolute; top: -6px; right: -6px;
+  min-width: 18px; height: 18px;
+  background: var(--kg-primary); color: white;
+  font-size: 11px; font-weight: 700;
+  border-radius: var(--radius-full);
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid white; padding: 0 4px;
+}
+.kg-marker--veiculo .kg-marker-emoji {
+  font-size: 20px; line-height: 1; pointer-events: none;
+}
+.kg-marker--veiculo .kg-marker-cor {
+  position: absolute; bottom: -4px; left: -4px;
+  width: 14px; height: 14px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--kg-white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+/* Seta de navegação (rumo real do GPS, ou aponta para o alvo se parado) —
+   rodada via JS (KGMap.setMarkerRotation), nunca reconstruída a cada tick. */
+.kg-marker--veiculo .kg-marker-seta {
+  position: absolute; top: -14px; left: 50%;
+  transform-origin: 50% 26px;
+  font-size: 16px; color: var(--kg-accent);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+  transition: transform 0.3s ease;
+  margin-left: -8px;
+}
+
+/* Popup enriquecido do veículo (matrícula, tipo, cor, condutor, telefone) */
+.kg-veiculo-popup { font-size: 13px; line-height: 1.7; }
+.kg-veiculo-popup a { color: var(--kg-success); font-weight: 600; text-decoration: none; }
+.kg-veiculo-popup a:hover { text-decoration: underline; }
+
+/* Popup do ponto de partida no editor de mapa do admin */
+.kg-ponto-popup { font-size: 13px; line-height: 1.6; min-width: 180px; }
+
+/* 4. Passageiro — ícone de pessoa, para nunca se confundir com o veículo
+   (kg-marker--veiculo, retangular com emoji de carro). */
+.kg-marker--passageiro {
+  width: 28px; height: 28px;
+  background: var(--kg-accent);
+  border: 2.5px solid var(--kg-white);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-marker);
+  font-size: 15px;
+  line-height: 1;
+}
+.kg-marker--passageiro::before {
+  content: "🧍";
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+
+/* 5. Utilizador (Eu) */
+.kg-marker--eu {
+  width: 22px; height: 22px;
+  background: var(--kg-primary);
+  border: 3px solid var(--kg-white);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-marker);
+  z-index: 20; position: relative;
+}
+/* Seta que aponta para o destino escrito (viagem urbana) — só aparece
+   depois de haver um destino, rodada via KGMap.setMarkerRotation. */
+.kg-marker--eu .kg-marker-seta {
+  position: absolute; top: -16px; left: 50%;
+  transform-origin: 50% 19px;
+  font-size: 14px; color: var(--kg-cta);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  pointer-events: none;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  margin-left: -7px;
+}
+.kg-marker-seta--oculta { opacity: 0; }
+
+/* 6. Ponto de Descida */
+.kg-marker--descida {
+  width: 30px; height: 30px;
+  background: var(--kg-warning);
+  border: 3px solid var(--kg-white);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-marker);
+  position: relative;
+}
+.kg-marker--descida::after {
+  content: "";
+  position: absolute;
+  bottom: -8px; left: 50%; transform: translateX(-50%);
+  width: 0; height: 0;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 9px solid var(--kg-warning);
+  filter: drop-shadow(0 2px 2px rgba(0,0,0,0.2));
+}
+
+/* Badge de estado */
+.kg-marker-badge {
+  position: absolute; top: -10px; left: 50%;
+  transform: translateX(-50%);
+  background: var(--kg-cta); color: var(--kg-text);
+  font-size: 10px; font-weight: 700;
+  padding: 2px 6px; border-radius: 6px;
+  white-space: nowrap; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  z-index: 5;
+}
+
+/* ==============================================
+   V-MILLION - Animações de Pulso (Performance)
+   ============================================== */
+
+:root {
+  --kg-pulse-duration: 2.2s;
+  --kg-pulse-ease: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+/* 1. Utilizador ("Eu") */
+.kg-marker--eu { position: relative; }
+.kg-marker--eu::before {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 56, 147, 0.4);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.7;
+  animation: kg-pulse-primary var(--kg-pulse-duration) var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+@keyframes kg-pulse-primary {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.65; }
+  100% { transform: translate(-50%, -50%) scale(2.5); opacity: 0; }
+}
+
+/* 2. Ring (Ponto de Partida) */
+.kg-marker--ponto.pulse::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--kg-primary);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.55;
+  animation: kg-pulse-ring 2.6s var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+}
+@keyframes kg-pulse-ring {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.55; }
+  100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; }
+}
+
+/* 3. Pulso Veículo na Fila (amarelo) */
+.kg-marker--veiculo.na-fila::before {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 14px;
+  background: rgba(247, 209, 22, 0.35);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.6;
+  animation: kg-pulse-fila var(--kg-pulse-duration) var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+}
+@keyframes kg-pulse-fila {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+}
+
+/* 4. Pulso SOS / Alerta */
+.kg-marker--sos::before,
+.kg-marker.alerta::before {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(207, 32, 39, 0.45);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.8;
+  animation: kg-pulse-sos 1.2s var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+}
+@keyframes kg-pulse-sos {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(2.2); opacity: 0; }
+}
+
+/* 5. Pulso Ponto de Descida */
+.kg-marker--descida.pulse::before {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.4);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.65;
+  animation: kg-pulse-descida var(--kg-pulse-duration) var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+}
+@keyframes kg-pulse-descida {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.65; }
+  100% { transform: translate(-50%, -50%) scale(2.1); opacity: 0; }
+}
+
+/* 6. Destaque temporário (3 ciclos) */
+.kg-marker.destaque::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  border: 2px solid var(--kg-accent);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.8;
+  animation: kg-pulse-destaque 1.6s var(--kg-pulse-ease) 3;
+  pointer-events: none;
+}
+@keyframes kg-pulse-destaque {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; }
+  100% { transform: translate(-50%, -50%) scale(1.9); opacity: 0; }
+}
+
+/* 7. Pulso duplo */
+.kg-marker.pulse-duplo::before {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 56, 147, 0.35);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.7;
+  animation: kg-pulse-primary 2s var(--kg-pulse-ease) infinite;
+  pointer-events: none;
+}
+.kg-marker.pulse-duplo::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%;
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: rgba(0, 56, 147, 0.25);
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 0.5;
+  animation: kg-pulse-primary 2s var(--kg-pulse-ease) infinite 0.6s;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kg-marker--eu::before,
+  .kg-marker--ponto.pulse::after,
+  .kg-marker--veiculo.na-fila::before,
+  .kg-marker--sos::before,
+  .kg-marker.alerta::before,
+  .kg-marker--descida.pulse::before,
+  .kg-marker.destaque::after,
+  .kg-marker.pulse-duplo::before,
+  .kg-marker.pulse-duplo::after {
+    animation: none !important;
+    opacity: 0 !important;
+  }
+}
+
+@media (max-width: 768px) {
+  :root { --kg-pulse-duration: 2.6s; }
+  .kg-marker--eu::before { animation-duration: 2.8s; }
+  .kg-marker--sos::before,
+  .kg-marker.alerta::before { animation-duration: 1.4s; }
+}
+
+/* Pausar durante drag ou muitos marcadores */
+.map-dragging .kg-marker::before,
+.map-dragging .kg-marker::after,
+.many-markers .kg-marker::before,
+.many-markers .kg-marker::after {
+  animation-play-state: paused;
+}
+
+/* ==============================================
+   V-MILLION - Overlay de Geolocalização Forçada (16.7)
+   e componentes de UI do mapa (16.1 - 16.6)
+   ============================================== */
+
+.kg-geo-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2000;
+}
+.kg-geo-overlay__box {
+  background: var(--kg-white);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.2);
+  max-width: 380px;
+  width: 90%;
+  padding: 32px 24px;
+  text-align: center;
+}
+.kg-geo-overlay__icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: rgba(207, 32, 39, 0.1);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--kg-danger);
+}
+.kg-geo-overlay__title { font-size: 1.15rem; font-weight: 700; margin: 0 0 8px; color: var(--kg-text); }
+.kg-geo-overlay__text { font-size: 0.9375rem; color: #475569; line-height: 1.5; margin: 0 0 20px; }
+
+.kg-map-controls {
+  /* top:80px em vez de 16px: o controlo de zoom do Leaflet
+     (L.control.zoom, position 'topright') ocupa esse canto por omissão
+     (~10px margem + ~60px de altura dos 2 botões +/-) — com 16px o botão
+     "recentrar" ficava por cima dele. */
+  position: absolute; top: 80px; right: 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 5;
+}
+.kg-map-btn {
+  width: 44px; height: 44px;
+  background: var(--kg-white);
+  border: none;
+  border-radius: 10px;
+  box-shadow: var(--shadow-marker);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--kg-primary);
+  cursor: pointer;
+}
+.kg-map-btn:hover { background: #f1f5f9; }
+
+.kg-map-sos {
+  position: absolute; bottom: 20px; right: 16px;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #CF2027 0%, #b91c1c 100%);
+  color: var(--kg-white);
+  border: none;
+  box-shadow: 0 6px 20px rgba(207, 32, 39, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 13px;
+  cursor: pointer;
+  z-index: 6;
+}
+
+.kg-map-legend {
+  position: absolute; bottom: 20px; left: 16px;
+  background: rgba(255,255,255,0.92);
+  border-radius: 10px;
+  box-shadow: var(--shadow-marker);
+  padding: 10px 14px;
+  font-size: 12px;
+  max-width: 220px;
+  z-index: 5;
+}
+.kg-map-legend__item { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+
+/* Painel de navegação (condutor): distância/tempo até ao alvo (passageiro
+   ou destino) enquanto uma rota está a ser guiada — nunca escurece o mapa,
+   só informa por cima dele (relatório do mapa, tarefas C/D/E). */
+.kg-nav-panel {
+  position: absolute; top: 16px; left: 16px;
+  background: var(--kg-white);
+  border-radius: 12px;
+  box-shadow: var(--shadow-marker);
+  padding: 10px 14px;
+  max-width: 260px;
+  z-index: 6;
+}
+.kg-nav-panel__titulo { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.875rem; color: var(--kg-text); }
+.kg-nav-panel__info { font-size: 0.8125rem; color: #475569; margin-top: 2px; }
+.kg-nav-panel__fechar {
+  position: absolute; top: 6px; right: 8px;
+  background: none; border: none; cursor: pointer;
+  font-size: 14px; color: #94a3b8; line-height: 1; padding: 4px;
+}
+@media (max-width: 767px) {
+  .kg-nav-panel { left: 8px; right: 8px; top: 8px; max-width: none; }
+}
+
+.kg-map-layers-panel {
+  position: absolute; top: 16px; right: 68px;
+  background: var(--kg-white);
+  border-radius: 12px;
+  box-shadow: var(--shadow-marker);
+  padding: 12px;
+  min-width: 180px;
+  z-index: 5;
+}
+.kg-map-layers-panel__toggle { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 0.875rem; }
+
+@media (max-width: 767px) {
+  .kg-map-layers-panel {
+    top: auto; bottom: 0; left: 0; right: 0;
+    border-radius: 16px 16px 0 0;
+    width: 100%;
+  }
+  .kg-map-sos { width: 68px; height: 68px; bottom: 16px; }
+}

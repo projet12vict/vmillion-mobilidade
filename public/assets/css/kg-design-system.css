@@ -1,0 +1,285 @@
+/* ==============================================
+   V-MILLION — Design System
+   Secção 15 da especificação técnica.
+   ============================================== */
+
+:root {
+  /* Cores oficiais */
+  --kg-primary: #003893;
+  --kg-primary-dark: #002a6e;
+  --kg-secondary: #1a56b0;
+  --kg-accent: #00B4D8;
+  --kg-cta: #F7D116;
+  --kg-cta-dark: #e6c200;
+  --kg-danger: #CF2027;
+  --kg-success: #10B981;
+  --kg-warning: #F59E0B;
+  --kg-text: #0f172a;
+  --kg-text-secondary: #334155;
+  --kg-border: #e2e8f0;
+  --kg-bg: #f8fafc;
+  --kg-white: #ffffff;
+
+  /* Gradientes */
+  --kg-gradient-header: linear-gradient(135deg, #003893 0%, #1a56b0 100%);
+  --kg-gradient-cta: linear-gradient(135deg, #F7D116 0%, #f5c511 100%);
+  --kg-gradient-sos: linear-gradient(135deg, #CF2027 0%, #b91c1c 100%);
+
+  /* Tipografia */
+  --kg-font: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 20px 50px rgba(0, 0, 0, 0.15);
+
+  /* Espaçamento (escala de 4px) */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* Rede de segurança contra scroll horizontal: basta UM elemento exceder a
+   largura por poucos píxeis (um badge, um popup do Leaflet, texto sem
+   quebra) para o telemóvel inteiro ganhar uma barra horizontal — sem isto,
+   não há nada a conter esse caso, mesmo com todo o resto responsivo. */
+html { overflow-x: hidden; }
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  font-family: var(--kg-font);
+  color: var(--kg-text);
+  background: var(--kg-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { margin: 0 0 var(--sp-3); font-weight: 700; }
+.kg-h1 { font-size: 3rem; font-weight: 800; line-height: 1.1; }
+.kg-h2 { font-size: 2rem; font-weight: 700; line-height: 1.2; }
+.kg-h3 { font-size: 1.25rem; font-weight: 600; line-height: 1.3; }
+p { font-size: 1rem; line-height: 1.6; color: var(--kg-text-secondary); }
+.kg-small { font-size: 0.875rem; line-height: 1.5; color: var(--kg-text-secondary); }
+
+/* ---------- Botões ---------- */
+.kg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-height: 44px;
+  padding: 0 var(--sp-6);
+  font-family: var(--kg-font);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+  text-decoration: none;
+}
+.kg-btn:active { transform: scale(0.97); }
+.kg-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.kg-btn--primario { background: var(--kg-primary); color: var(--kg-white); }
+.kg-btn--primario:hover { background: var(--kg-primary-dark); }
+
+.kg-btn--cta { background: var(--kg-gradient-cta); color: var(--kg-text); }
+.kg-btn--cta:hover { background: var(--kg-cta-dark); }
+
+.kg-btn--perigo { background: var(--kg-gradient-sos); color: var(--kg-white); }
+.kg-btn--perigo:hover { filter: brightness(0.95); }
+
+.kg-btn--outline {
+  background: transparent;
+  color: var(--kg-primary);
+  border: 1.5px solid var(--kg-primary);
+}
+.kg-btn--outline:hover { background: rgba(0, 56, 147, 0.06); }
+
+.kg-btn--ghost { background: transparent; color: var(--kg-text-secondary); }
+.kg-btn--ghost:hover { background: var(--kg-border); }
+
+.kg-btn--full { width: 100%; }
+.kg-btn--sm { min-height: 36px; padding: 0 var(--sp-4); font-size: 0.8125rem; }
+
+/* ---------- Cards ---------- */
+.kg-card {
+  background: var(--kg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--sp-5) var(--sp-6);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+.kg-card--hover:hover { box-shadow: var(--shadow-lg); transform: translateY(-2px); }
+
+/* ---------- Inputs & Selects ---------- */
+.kg-field { display: flex; flex-direction: column; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+.kg-label { font-size: 0.875rem; font-weight: 600; color: var(--kg-text); }
+.kg-input, .kg-select, .kg-textarea {
+  min-height: 48px;
+  padding: 0 var(--sp-4);
+  font-family: var(--kg-font);
+  font-size: 1rem;
+  color: var(--kg-text);
+  background: var(--kg-white);
+  border: 1.5px solid var(--kg-border);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  width: 100%;
+}
+.kg-textarea { min-height: 96px; padding: var(--sp-3) var(--sp-4); resize: vertical; }
+.kg-input:focus, .kg-select:focus, .kg-textarea:focus {
+  border-color: var(--kg-primary);
+  box-shadow: 0 0 0 3px rgba(0, 180, 216, 0.25);
+}
+.kg-input.erro, .kg-select.erro { border-color: var(--kg-danger); }
+.kg-erro-msg { font-size: 0.8125rem; color: var(--kg-danger); }
+
+/* ---------- Badges de estado ---------- */
+.kg-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  padding: 2px var(--sp-3);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+}
+.kg-badge--pendente { background: #fef3c7; color: #92400e; }
+.kg-badge--confirmado { background: #d1fae5; color: #065f46; }
+.kg-badge--a_bordo { background: #cffafe; color: #0e7490; }
+.kg-badge--concluido { background: #e2e8f0; color: #334155; }
+.kg-badge--recusado { background: #fee2e2; color: #991b1b; }
+
+/* ---------- Modal ---------- */
+.kg-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  animation: kg-fade-in 0.2s ease;
+}
+.kg-modal {
+  background: var(--kg-white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xl);
+  width: 100%;
+  max-width: 480px;
+  min-width: 320px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: var(--sp-6);
+  animation: kg-scale-in 0.2s ease;
+}
+@keyframes kg-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes kg-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+/* ---------- Layout de assentos (5 filas x 3 lugares) ---------- */
+.kg-assentos {
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-4);
+  background: var(--kg-bg);
+  border-radius: var(--radius-md);
+}
+.kg-assentos__fila { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-2); }
+.kg-assentos__fila--condutor { grid-template-columns: repeat(2, 1fr) 1fr; opacity: 0.7; }
+.kg-assento {
+  min-height: 44px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--kg-border);
+  background: var(--kg-white);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.kg-assento--livre { background: #ecfdf5; border-color: var(--kg-success); color: #065f46; }
+.kg-assento--ocupado { background: var(--kg-border); border-color: var(--kg-border); color: #94a3b8; cursor: not-allowed; }
+.kg-assento--selecionado { outline: 3px solid var(--kg-primary); outline-offset: 1px; background: var(--kg-primary); color: var(--kg-white); }
+
+/* ---------- Utilidades de layout ---------- */
+.kg-container { max-width: 1200px; margin: 0 auto; padding: 0 var(--sp-5); }
+/* flex-wrap: wrap por omissão — sem isto, linhas com vários botões (ex:
+   Confirmar/Recusar, Chamar/WhatsApp) não quebram em ecrã estreito e ou
+   ficam cortadas ou empurram a largura da página inteira (a causa mais
+   provável do "sistema muito largo" no telemóvel). Só algumas linhas
+   específicas do código já tinham isto acrescentado à mão, inline — a
+   maioria não. Onde realmente precisar de ficar numa só linha (raro),
+   usar flex-wrap: nowrap explicitamente nesse elemento. */
+.kg-flex { display: flex; flex-wrap: wrap; }
+.kg-flex-col { display: flex; flex-direction: column; }
+.kg-gap-2 { gap: var(--sp-2); }
+.kg-gap-4 { gap: var(--sp-4); }
+.kg-items-center { align-items: center; }
+.kg-justify-between { justify-content: space-between; }
+
+/* ---------- Skeleton loading ---------- */
+.kg-skeleton {
+  background: linear-gradient(90deg, #e2e8f0 25%, #edf2f7 37%, #e2e8f0 63%);
+  background-size: 400% 100%;
+  animation: kg-skeleton-loading 1.4s ease infinite;
+  border-radius: var(--radius-md);
+}
+@keyframes kg-skeleton-loading { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+
+.kg-spinner {
+  width: 24px; height: 24px;
+  border: 3px solid rgba(0, 56, 147, 0.2);
+  border-top-color: var(--kg-primary);
+  border-radius: 50%;
+  animation: kg-spin 0.7s linear infinite;
+}
+@keyframes kg-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Notificações (slide-in) ---------- */
+.kg-toast {
+  position: fixed; top: var(--sp-5); right: var(--sp-5);
+  background: var(--kg-white);
+  border-left: 4px solid var(--kg-primary);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  min-width: 280px;
+  animation: kg-slide-in 0.25s ease;
+  z-index: 1100;
+}
+.kg-toast--sucesso { border-left-color: var(--kg-success); }
+.kg-toast--erro { border-left-color: var(--kg-danger); }
+@keyframes kg-slide-in { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .kg-btn, .kg-card--hover, .kg-modal-overlay, .kg-modal, .kg-toast, .kg-skeleton, .kg-spinner {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---------- Responsividade base ---------- */
+@media (max-width: 767px) {
+  .kg-h1 { font-size: 2.25rem; }
+  .kg-h2 { font-size: 1.5rem; }
+  .kg-container { padding: 0 var(--sp-4); }
+  .kg-modal { max-width: 100%; border-radius: var(--radius-lg) var(--radius-lg) 0 0; margin-top: auto; }
+  .kg-modal-overlay { align-items: flex-end; }
+  /* .kg-btn--sm (36px) fica abaixo do alvo de toque recomendado (44px) —
+     nas listas de ações (Confirmar/Recusar/Chamar/Ir buscar, ...) isto
+     conta a sério em ecrã pequeno. Só sobe no breakpoint mobile: no
+     desktop, com rato, 36px continua bem. */
+  .kg-btn--sm { min-height: 44px; }
+}

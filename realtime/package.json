@@ -1,0 +1,14 @@
+{
+  "name": "vmillion-realtime",
+  "version": "1.0.0",
+  "private": true,
+  "description": "V-MILLION - servico de tempo real (Socket.io) para posicoes, reservas e SOS",
+  "license": "MIT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "socket.io": "^4.7.5"
+  }
+}

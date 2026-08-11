@@ -1,0 +1,16 @@
+{
+  "name": "V-MILLION",
+  "short_name": "V-MILLION",
+  "description": "Mobilidade inteligente para Cabo Verde",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#003893",
+  "theme_color": "#003893",
+  "orientation": "portrait",
+  "lang": "pt-CV",
+  "icons": [
+    { "src": "/assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

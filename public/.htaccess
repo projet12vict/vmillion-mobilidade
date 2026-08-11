@@ -1,0 +1,57 @@
+# V-MILLION — configuração do document root público.
+# Nota: includes/, config/, database/ e uploads/ ficam FORA desta pasta
+# (fora do document root) por desenho do projeto — já não são alcançáveis
+# por HTTP mesmo sem regra de bloqueio explícita aqui.
+
+# ------------------------------------------------------------------
+# Redirecionamento HTTP -> HTTPS
+# ------------------------------------------------------------------
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} off
+    RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+</IfModule>
+
+# ------------------------------------------------------------------
+# Proxy para o serviço de tempo real (Socket.io, processo Node à parte —
+# ver realtime/server.js, porta KG_REALTIME_PORT/3001). Sem isto, o cliente
+# tinha de ligar diretamente a http(s)://<host>:3001, e como a página corre
+# em HTTPS o browser força wss:// — que falha (ERR_SSL_PROTOCOL_ERROR) porque
+# o Node não tem certificado TLS nenhum. Com o proxy, o cliente liga a
+# wss://<mesmo-host>/socket.io/ (a mesma origem/certificado da página) e o
+# Apache é que fala HTTP simples com o Node em 127.0.0.1:3001.
+# Requer mod_proxy, mod_proxy_http e mod_proxy_wstunnel ativos no Apache —
+# ver README.md. Sem esses módulos, este bloco não tem efeito e o cliente
+# cai no fallback de polling a cada 5s, como já acontecia antes.
+<IfModule mod_proxy_wstunnel.c>
+    <IfModule mod_rewrite.c>
+        RewriteCond %{HTTP:Upgrade} =websocket [NC]
+        RewriteRule ^socket\.io/(.*) ws://127.0.0.1:3001/socket.io/$1 [P,L]
+    </IfModule>
+</IfModule>
+<IfModule mod_proxy_http.c>
+    <IfModule mod_rewrite.c>
+        RewriteCond %{HTTP:Upgrade} !=websocket [NC]
+        RewriteRule ^socket\.io/(.*) http://127.0.0.1:3001/socket.io/$1 [P,L]
+    </IfModule>
+</IfModule>
+
+# ------------------------------------------------------------------
+# Sem listagem de diretórios
+# ------------------------------------------------------------------
+Options -Indexes
+
+# ------------------------------------------------------------------
+# Bloqueio de ficheiros sensíveis, caso alguma vez apareçam aqui dentro
+# ------------------------------------------------------------------
+<FilesMatch "\.(sql|env|log|ini|bak)$">
+    Require all denied
+</FilesMatch>
+
+# Bloqueio de qualquer ficheiro ou pasta cujo nome comece por "." (ex:
+# .git, .claude, .cursor, .env) — defesa extra caso algum apareça aqui
+# dentro do document root por engano.
+<IfModule mod_rewrite.c>
+    RewriteCond %{REQUEST_URI} (^|/)\.[^/]+ [NC]
+    RewriteRule ^ - [F]
+</IfModule>

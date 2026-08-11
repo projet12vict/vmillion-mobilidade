@@ -1,0 +1,47 @@
+# Dependências
+/realtime/node_modules/
+
+# Uploads: ficheiros reais enviados por condutores/passageiros (comprovativos,
+# recibos gerados) — nunca deve ir para o Git, contém dados pessoais reais.
+/uploads/
+
+# Backups de base de dados: dumps de kabugo/kabugo_v2 com dados reais de
+# condutores e passageiros (nomes, telefones, NIF, hashes de senha). Os
+# ficheiros de esquema/migração (database/schema.sql, database/migration_*.sql)
+# NÃO são afetados por esta regra — são código-fonte versionado, só os
+# dumps dentro de database/backups/ ficam de fora.
+/database/backups/
+
+# Logs e ficheiros temporários
+*.log
+*.tmp
+*.cache
+sess_*
+
+# Ficheiros de sessão/config locais que alguém possa criar sem querer versionar
+*.local
+.env
+.env.*
+
+# Ferramentas de agentes de IA: estado/telemetria local (custos, sessões,
+# uso de skills) — não é código do projeto, não deve ser partilhado. Sem "/"
+# inicial de propósito: apanha pastas .claude/.cursor/.kiro em qualquer
+# profundidade (já apareceram por engano dentro de database/, public/ e
+# realtime/, não só na raiz).
+.claude/
+.cursor/
+.kiro/
+
+# IDE / sistema operativo
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Ficheiros de backup manuais
+*.bak
+*.old
+*.orig
+*~
