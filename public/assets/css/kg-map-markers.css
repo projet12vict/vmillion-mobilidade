@@ -16,6 +16,23 @@
   --radius-full: 9999px;
 }
 
+/* Invólucro que o Leaflet cria e posiciona (iconSize 42x42, ver kg-map.js).
+   O marcador lá dentro pode ser bem mais pequeno — o ponto do GPS tem 22px —
+   e sem esta centragem encostava ao canto superior esquerdo, desalinhado da
+   coordenada real. A área de clique é entregue ao marcador em si: a caixa de
+   42px sobrava para os lados e apanhava os cliques dos marcadores vizinhos
+   (era assim que o ponto do GPS engolia os cliques no marcador do veículo,
+   que está na mesma coordenada). */
+.kg-marker-icone {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 0;
+  pointer-events: none;
+}
+.kg-marker-icone > .kg-marker { pointer-events: auto; }
+
 .kg-marker {
   display: flex;
   align-items: center;
@@ -26,7 +43,11 @@
   will-change: transform;
   transform: translateZ(0);
   backface-visibility: hidden;
-  contain: layout style paint;
+  /* Sem 'paint': o containment de pintura recorta os filhos à caixa do
+     marcador, e é fora dela que vivem a pastilha da cor, o badge de lugares
+     e a seta de navegação — ficavam todos invisíveis. 'layout style' mantém
+     o isolamento que interessa ao desempenho, sem recortar nada. */
+  contain: layout style;
 }
 
 .kg-marker:hover { transform: scale(1.12); z-index: 10; }
@@ -74,7 +95,8 @@
   border-radius: 12px;
   border: 2.5px solid var(--kg-primary);
   box-shadow: var(--shadow-marker);
-  overflow: hidden;
+  /* Sem 'overflow: hidden' pelo mesmo motivo do 'contain' acima: o badge de
+     lugares (top/right: -6px) e a seta ficam de fora da caixa de propósito. */
 }
 .kg-marker--veiculo.na-fila {
   border-color: var(--kg-cta);
@@ -115,8 +137,75 @@
   margin-left: -8px;
 }
 
+/* Pastilha "a bordo/livres" do próprio veículo do condutor: dois números em
+   vez de um, por isso precisa de mais largura e de fonte um pouco menor. */
+.kg-marker--veiculo .lugares--ocupacao {
+  font-size: 10px; letter-spacing: -0.2px; padding: 0 5px;
+}
+
+/* Chip do veículo fora do mapa (cartão "Veículo ativo" do painel do condutor):
+   o mesmo emoji e a mesma pastilha de cor do marcador, em tamanho de ícone de
+   título e sem badge de lugares nem hover — é identificação, não um alvo de
+   clique. A cor da borda segue o estado, como no marcador. */
+.kg-veiculo-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px; height: 28px;
+  margin-right: 8px;
+  vertical-align: -0.4em;
+  background: var(--kg-white);
+  border: 2px solid var(--kg-primary);
+  border-radius: 9px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.kg-veiculo-chip.na-fila { border-color: var(--kg-cta); }
+.kg-veiculo-chip.em-movimento { border-color: var(--kg-accent); }
+.kg-veiculo-chip.partiu { border-color: var(--kg-accent); opacity: 0.75; }
+.kg-veiculo-chip.chegou { border-color: var(--kg-success); }
+.kg-veiculo-chip .kg-marker-emoji { font-size: 15px; line-height: 1; }
+.kg-veiculo-chip .kg-marker-cor {
+  position: absolute; bottom: -3px; right: -3px;
+  width: 11px; height: 11px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--kg-white);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
 /* Popup enriquecido do veículo (matrícula, tipo, cor, condutor, telefone) */
-.kg-veiculo-popup { font-size: 13px; line-height: 1.7; }
+.kg-veiculo-popup { font-size: 13px; line-height: 1.7; min-width: 190px; }
+/* Cada linha traz agora nome, destino e assento, por isso a lista precisa de
+   mais altura antes de rolar — com 132px cabiam duas pessoas. */
+.kg-veiculo-popup-lista {
+  margin: 4px 0 0; padding: 0; list-style: none;
+  max-height: 190px; overflow-y: auto;
+}
+.kg-veiculo-popup-lista li {
+  line-height: 1.45;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+}
+.kg-veiculo-popup-lista li:last-child { border-bottom: 0; }
+/* Quem ainda não embarcou: mesma lista, esbatida, para nunca ser confundida
+   com quem já vai dentro do carro. */
+.kg-veiculo-popup-lista--aguardam li { opacity: 0.75; }
+.kg-passageiro-nome { font-weight: 600; }
+.kg-passageiro-destino { color: var(--kg-muted, #64748b); }
+/* Assento e número de lugares: pastilhas, para o condutor os encontrar de
+   relance no meio do nome e do destino. */
+.kg-passageiro-lugar,
+.kg-passageiro-estado {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kg-passageiro-lugar { background: rgba(0, 56, 147, 0.1); color: var(--kg-primary); }
+.kg-passageiro-estado { background: rgba(148, 163, 184, 0.22); color: var(--kg-muted, #64748b); }
+.kg-veiculo-popup-vazio { color: var(--kg-muted, #64748b); font-style: italic; }
 .kg-veiculo-popup a { color: var(--kg-success); font-weight: 600; text-decoration: none; }
 .kg-veiculo-popup a:hover { text-decoration: underline; }
 
@@ -160,6 +249,29 @@
   margin-left: -7px;
 }
 .kg-marker-seta--oculta { opacity: 0; }
+
+/* Com um veículo selecionado, o ponto do GPS deixa de ser um ponto anónimo e
+   passa a mostrar esse veículo (mesmo emoji do tipo e mesma pastilha de cor do
+   marcador do veículo), mantendo o pulso e a seta que já o identificavam como
+   "eu". Sem veículo escolhido volta ao ponto azul, sem esta classe. */
+.kg-marker--eu.kg-marker--eu-veiculo {
+  width: 34px; height: 34px;
+  background: var(--kg-white);
+  border: 2.5px solid var(--kg-primary);
+  border-radius: 11px;
+}
+.kg-marker--eu-veiculo .kg-marker-emoji { font-size: 17px; line-height: 1; pointer-events: none; }
+.kg-marker--eu-veiculo .kg-marker-cor {
+  position: absolute; bottom: -4px; right: -4px;
+  width: 12px; height: 12px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--kg-white);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+/* A seta é a mesma, mas o marcador é maior: sem reajustar a origem passava a
+   girar dentro do ícone em vez de à sua volta. */
+.kg-marker--eu-veiculo .kg-marker-seta { top: -15px; transform-origin: 50% 25px; }
 
 /* 6. Ponto de Descida */
 .kg-marker--descida {
@@ -412,6 +524,9 @@
   cursor: pointer;
 }
 .kg-map-btn:hover { background: #f1f5f9; }
+/* Botão de alternar que está desligado (ex: limites dos municípios
+   escondidos): esbatido, para se distinguir de um botão de ação simples. */
+.kg-map-btn--off { color: #94a3b8; background: #f8fafc; }
 
 .kg-map-sos {
   position: absolute; bottom: 20px; right: 16px;
@@ -442,6 +557,24 @@
 /* Painel de navegação (condutor): distância/tempo até ao alvo (passageiro
    ou destino) enquanto uma rota está a ser guiada — nunca escurece o mapa,
    só informa por cima dele (relatório do mapa, tarefas C/D/E). */
+/* Pilha do canto superior esquerdo do mapa: painel de navegação e pastilha do
+   município. Empilhados, e não sobrepostos, porque os dois aparecem ao mesmo
+   tempo assim que o condutor "vai buscar" um passageiro. O canto direito fica
+   livre para o controlo de zoom do Leaflet e para .kg-map-controls. */
+.kg-map-topo {
+  position: absolute; top: 16px; left: 16px;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  max-width: calc(100% - 92px);
+  z-index: 6;
+  /* O espaço entre os cartões (e à volta deles) continua a ser mapa: sem isto,
+     a caixa da pilha comia o arrasto numa faixa larga do topo. */
+  pointer-events: none;
+}
+.kg-map-topo > * { pointer-events: auto; }
+/* Dentro da pilha quem posiciona é o flex; o 'absolute' do painel tirava-o de
+   lá e voltava a pô-lo por cima da pastilha. */
+.kg-map-topo .kg-nav-panel { position: relative; top: auto; left: auto; z-index: auto; }
+
 .kg-nav-panel {
   position: absolute; top: 16px; left: 16px;
   background: var(--kg-white);
@@ -456,10 +589,38 @@
 .kg-nav-panel__fechar {
   position: absolute; top: 6px; right: 8px;
   background: none; border: none; cursor: pointer;
-  font-size: 14px; color: #94a3b8; line-height: 1; padding: 4px;
+  /* display:flex desde que o ✕ passou a ser um <svg>: sem isto ficava
+     desalinhado do canto por causa da line-height do texto. */
+  display: flex; align-items: center; justify-content: center;
+  color: #94a3b8; line-height: 1; padding: 4px;
 }
+.kg-nav-panel__fechar:hover { color: #475569; }
 @media (max-width: 767px) {
+  .kg-map-topo { left: 8px; top: 8px; max-width: calc(100% - 84px); }
   .kg-nav-panel { left: 8px; right: 8px; top: 8px; max-width: none; }
+  .kg-map-topo .kg-nav-panel { left: auto; right: auto; top: auto; width: 100%; }
+}
+
+/* Aviso de proximidade dos pontos de descida (condutor): a API de posição
+   devolve as reservas a menos de 500 m do veículo — antes esse cálculo era
+   feito no servidor a cada posição e deitado fora pelo cliente. Fica em
+   baixo à esquerda, canto livre no painel do condutor (a legenda do mapa só
+   existe no painel do passageiro). */
+.kg-map-aviso {
+  position: absolute; bottom: 20px; left: 16px;
+  background: var(--kg-white);
+  border-left: 4px solid var(--kg-warning);
+  border-radius: 12px;
+  box-shadow: var(--shadow-marker);
+  padding: 10px 14px;
+  max-width: 260px;
+  z-index: 6;
+}
+.kg-map-aviso__titulo { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 0.875rem; color: var(--kg-text); }
+.kg-map-aviso__item { font-size: 0.8125rem; color: #475569; margin-top: 4px; }
+@media (max-width: 767px) {
+  /* Não pode ficar por baixo do botão SOS (60-68 px + margem à direita). */
+  .kg-map-aviso { left: 8px; right: 92px; max-width: none; bottom: 16px; }
 }
 
 .kg-map-layers-panel {
@@ -481,3 +642,84 @@
   }
   .kg-map-sos { width: 68px; height: 68px; bottom: 16px; }
 }
+
+/* O contentor do mapa tem de ser um contexto de empilhamento próprio. Sem
+   isto, os panes do Leaflet (z-index 200 a 700) não ficam contidos no mapa —
+   #map está posicionado mas com z-index: auto — e competem diretamente com os
+   controlos que o HTML põe POR CIMA do mapa (SOS, recentrar, avisos, legenda),
+   que vivem a z-index 5/6. Resultado: os tiles eram pintados por cima deles e
+   o botão SOS ficava invisível. Com z-index: 0 aqui, os z-index do Leaflet
+   passam a valer só dentro do mapa. */
+.leaflet-container { z-index: 0; }
+
+/* Painel do condutor: o SOS sai do rebordo inferior (20px) e sobe acima dele
+   — a 20px ficava colado à atribuição do Leaflet e ao limite da janela e, no
+   telemóvel, dentro da faixa que a barra inferior do browser tapa. */
+.kg-map-sos--fixo { bottom: 88px; }
+
+/* Abaixo do lg é a página inteira que faz scroll: o SOS preso ao bloco do
+   mapa saía do ecrã mal o condutor descia até à lista de passageiros. Fixo ao
+   ecrã, o botão de emergência está sempre a um toque. A partir do lg o painel
+   não faz scroll (grelha de altura fixa) e a posição absoluta dentro do mapa
+   chega. z-index abaixo dos modais (z-1000), para não ficar por cima deles. */
+@media (max-width: 1023px) {
+  .kg-map-sos--fixo {
+    position: fixed;
+    right: 16px;
+    bottom: calc(88px + env(safe-area-inset-bottom));
+    z-index: 25;
+  }
+}
+
+/* ==============================================
+   Delimitação por município (docs/Municipio.pdf)
+   ============================================== */
+
+/* Nome do concelho pousado no interior dele (propriedade 'centro' do
+   GeoJSON). É um tooltip do Leaflet, mas nada tem de balão: sem fundo,
+   sem seta, sem caixa — só texto com um halo branco, que é o que o deixa
+   legível tanto sobre o mar como sobre uma mancha urbana dos tiles. */
+.leaflet-tooltip.kg-municipio-etiqueta {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #1e293b;
+  text-shadow:
+    0 0 3px var(--kg-white), 0 0 3px var(--kg-white),
+    0 1px 2px var(--kg-white), 0 -1px 2px var(--kg-white);
+  /* A etiqueta é decorativa: os cliques têm de continuar a chegar ao mapa e
+     aos marcadores que estejam por baixo dela. */
+  pointer-events: none;
+}
+.leaflet-tooltip.kg-municipio-etiqueta::before { display: none; }
+
+/* Detalhe do concelho, ao tocar na linha da fronteira: nome, ilha e a área
+   do documento de referência. */
+.kg-municipio-popup { font-size: 13px; line-height: 1.6; min-width: 150px; }
+.kg-municipio-popup strong { color: var(--kg-primary); }
+.kg-municipio-popup div { color: var(--kg-muted, #64748b); }
+
+/* Pastilha "estou em X": ao nível da rua (zoom de condução) as etiquetas dos
+   concelhos ficam todas fora do ecrã, e é aqui que o condutor lê em que
+   município está a conduzir. Fica no topo do mapa, ao centro, longe do
+   controlo de zoom (canto direito) e do painel de navegação. */
+.kg-municipio-atual {
+  max-width: 100%;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow-marker);
+  color: var(--kg-text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.kg-municipio-atual__ilha { color: var(--kg-muted, #64748b); font-weight: 500; }

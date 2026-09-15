@@ -1,0 +1,225 @@
+import { jsx as _jsx } from "react/jsx-runtime";
+import { existsSync, statSync } from "node:fs";
+import { constants } from "node:os";
+import { resolve } from "node:path";
+import { render } from "ink";
+import { App } from "./app.js";
+import { normalizeCommands } from "./args.js";
+import { runInline } from "./inline.js";
+import { fitsTui, formatStreamContinuation, formatStreamLabel, inlineChildColumns, MIN_COLUMNS, MIN_ROWS, sanitizeTitle, systemMsg, } from "./util.js";
+export { DEFAULT_COLORS } from "./color.js";
+const SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT"];
+function positiveInt(value, name) {
+    if (!Number.isSafeInteger(value) || value <= 0) {
+        throw new Error(`${name} must be a positive integer, got ${value}.`);
+    }
+    return value;
+}
+function supportsColor() {
+    if (process.env.NO_COLOR) {
+        return false;
+    }
+    if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") {
+        return true;
+    }
+    return Boolean(process.stdout.isTTY);
+}
+/**
+ * Installs the teardown that has to survive a signal. `process.on("exit")` does
+ * not run when we are killed by one, and the children sit in their own process
+ * groups so they never see the terminal's own SIGHUP — without these, closing
+ * the window leaves every dev server running and holding its port.
+ */
+function installTeardown(shutdown, onExit) {
+    const handlers = SIGNALS.map((signal) => {
+        const handler = () => {
+            shutdown();
+            process.exit(128 + constants.signals[signal]);
+        };
+        process.on(signal, handler);
+        return [signal, handler];
+    });
+    process.on("exit", onExit);
+    return () => {
+        for (const [signal, handler] of handlers) {
+            process.removeListener(signal, handler);
+        }
+        process.removeListener("exit", onExit);
+    };
+}
+/**
+ * Runs the commands and resolves with an exit code once everything has exited,
+ * the terminal is restored and every child process is gone. Options are
+ * validated before we touch the terminal, so a bad option throws with the screen
+ * untouched.
+ *
+ * Renders the TUI when the terminal can support it and falls back to inline
+ * output — every line printed as it arrives, no alternate screen, no input —
+ * when it cannot, so a pipe, a CI job or a window too small to draw a layout in
+ * gets usable output rather than an error.
+ */
+export async function multiplex(options) {
+    const commandDefs = normalizeCommands(options.commands ?? []);
+    const bufferSize = positiveInt(options.bufferSize ?? 2_000, "bufferSize");
+    const streamBufferSize = positiveInt(options.streamBufferSize ?? 10_000, "streamBufferSize");
+    const timestamps = options.timestamps ?? false;
+    const title = options.title ? sanitizeTitle(options.title) : undefined;
+    const json = options.json ?? false;
+    const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+    const columns = process.stdout.columns ?? 0;
+    const rows = process.stdout.rows ?? 0;
+    const tooSmall = interactive && !fitsTui(columns, rows);
+    const inline = json || (options.inline ?? false) || !interactive || tooSmall;
+    const cwd = resolve(options.cwd ?? process.cwd());
+    if (!existsSync(cwd)) {
+        throw new Error(`cwd path does not exist: ${cwd}`);
+    }
+    if (!statSync(cwd).isDirectory()) {
+        throw new Error(`cwd path is not a directory: ${cwd}`);
+    }
+    const procsRef = { current: [] };
+    function killAll() {
+        for (const proc of procsRef.current) {
+            try {
+                if (proc?.pid) {
+                    process.kill(-proc.pid, "SIGKILL");
+                }
+            }
+            catch {
+                //
+            }
+        }
+    }
+    return inline ? runInlineMode() : runTui();
+    async function runInlineMode() {
+        const color = !json && supportsColor();
+        const useTitle = title && !json && process.stdout.isTTY;
+        let shuttingDown = false;
+        function shutdown() {
+            if (shuttingDown) {
+                return;
+            }
+            shuttingDown = true;
+            killAll();
+            if (useTitle) {
+                try {
+                    process.stdout.write("\x1b[23;0t");
+                }
+                catch {
+                    //
+                }
+            }
+        }
+        const uninstall = installTeardown(shutdown, killAll);
+        // Without a TTY inline mode is the expected outcome and needs no
+        // explanation; in a real terminal the missing TUI does.
+        if (tooSmall && !json) {
+            const notice = `Terminal is ${columns}x${rows}; the TUI needs at least ${MIN_COLUMNS}x${MIN_ROWS}. Running inline.`;
+            process.stderr.write(`${color ? systemMsg(notice) : notice}\n`);
+        }
+        if (useTitle) {
+            process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
+        }
+        try {
+            const { done } = runInline({
+                commandDefs,
+                cwd,
+                timestamps,
+                autoRestart: options.restart ?? true,
+                json,
+                color,
+                columns: inlineChildColumns(commandDefs.map((c) => c.label), process.stdout.columns ?? 80, timestamps),
+                procsRef,
+            });
+            const code = await done;
+            shutdown();
+            return code;
+        }
+        catch {
+            shutdown();
+            return 1;
+        }
+        finally {
+            uninstall();
+        }
+    }
+    async function runTui() {
+        const outputRef = { current: [] };
+        let instance;
+        let shuttingDown = false;
+        let titlePushed = false;
+        function restoreTerminal() {
+            try {
+                process.stdout.write("\x1b[?25h\x1b[?1049l");
+                // Guarded: restoreTerminal runs twice, and a second pop would take someone else's title off the stack.
+                if (titlePushed) {
+                    titlePushed = false;
+                    process.stdout.write("\x1b[23;0t");
+                }
+            }
+            catch {
+                //
+            }
+        }
+        function flushOutput() {
+            if (outputRef.current.length === 0) {
+                return;
+            }
+            const maxLabelLen = Math.max(...commandDefs.map((c) => c.label.length));
+            try {
+                for (const sl of outputRef.current) {
+                    const cmd = commandDefs[sl.cmdIndex];
+                    const prefix = sl.cont
+                        ? formatStreamContinuation(maxLabelLen, true)
+                        : formatStreamLabel(cmd.label, cmd.color, maxLabelLen, true);
+                    process.stdout.write(`${sl.ts}${prefix}${sl.text}\n`);
+                }
+            }
+            catch {
+                // The terminal can already be gone when we got here via SIGHUP.
+            }
+        }
+        /**
+         * Unmount first, so Ink's final frame and its raw-mode teardown happen
+         * while we still own the alternate screen, then leave the screen before
+         * flushing so the logs land in the real scrollback.
+         */
+        function shutdown() {
+            if (shuttingDown) {
+                return;
+            }
+            shuttingDown = true;
+            try {
+                instance?.unmount();
+            }
+            catch {
+                //
+            }
+            killAll();
+            restoreTerminal();
+            flushOutput();
+        }
+        const uninstall = installTeardown(shutdown, () => {
+            killAll();
+            restoreTerminal();
+        });
+        if (title) {
+            process.stdout.write(`\x1b[22;0t\x1b]0;${title}\x07`);
+            titlePushed = true;
+        }
+        process.stdout.write("\x1b[?1049h\x1b[?25l");
+        try {
+            instance = render(_jsx(App, { commandDefs: commandDefs, cwd: cwd, initialStreamMode: options.stream ?? false, bufferSize: bufferSize, streamBufferSize: streamBufferSize, timestamps: timestamps, autoRestart: options.restart ?? true, title: title, outputRef: outputRef, procsRef: procsRef }), { exitOnCtrlC: true });
+            await instance.waitUntilExit();
+            shutdown();
+            return 0;
+        }
+        catch {
+            shutdown();
+            return 1;
+        }
+        finally {
+            uninstall();
+        }
+    }
+}

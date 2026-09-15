@@ -13,6 +13,7 @@
  *   KGSons.tocarMensagem()   -> nova mensagem no autofalante
  *   KGSons.tocarChamar()     -> feedback ao clicar em "Chamar" (tel:)
  *   KGSons.tocarSucesso()    -> ex: condutor a caminho, pedido aceite
+ *   KGSons.tocarPedido()     -> pedido novo de passageiro (painel do condutor)
  *   KGSons.tocarErro()
  *   KGSons.estaAtivo() / definirAtivo(bool)
  *   KGSons.obterVolume() / definirVolume(0-100)
@@ -163,6 +164,21 @@
     beep(c, { freq: 990, duracao: 0.16, atraso: 0.08 });
   }
 
+  // Pedido novo de passageiro: três subidas seguidas, mais longas e mais
+  // altas do que a mensagem — tem de se ouvir com o rádio ligado e o
+  // telemóvel no suporte. Não passa por prefereReduzido(): essa preferência é
+  // sobre animações, e calar este som deixava o condutor sem o único aviso
+  // de que há alguém à espera dele.
+  function tocarPedido() {
+    if (!estaAtivo()) return;
+    const c = obterContexto();
+    if (!c) return;
+    [0, 0.45, 0.9].forEach((atraso) => {
+      beep(c, { freq: 740, duracao: 0.16, tipo: 'triangle', atraso });
+      beep(c, { freq: 1110, duracao: 0.22, tipo: 'triangle', atraso: atraso + 0.15 });
+    });
+  }
+
   function tocarErro() {
     if (!podeTocar()) return;
     const c = obterContexto();
@@ -171,7 +187,7 @@
   }
 
   global.KGSons = {
-    tocarMensagem, tocarChamar, tocarSucesso, tocarErro,
+    tocarMensagem, tocarChamar, tocarSucesso, tocarErro, tocarPedido,
     iniciarToqueIncoming, pararToqueIncoming, tocarEnded,
     estaAtivo, definirAtivo, obterVolume, definirVolume,
   };

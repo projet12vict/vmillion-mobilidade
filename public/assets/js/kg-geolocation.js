@@ -11,7 +11,17 @@
   const OVERLAY_ID = 'kg-geo-overlay';
   const MIN_DIST_M = 5; // filtragem de ruído: só emitir posição se moveu > 5m
   const PRECISAO_MAX_M = 100; // acima disto, espera-se por uma leitura melhor antes de confiar
+  const PRECISAO_BOA_M = 25; // leitura de GPS a sério (não WiFi/rede): aceite de imediato
   const PRECISAO_TIMEOUT_MS = 15000; // não bloqueia para sempre: ao fim disto, usa o que houver
+  // Depois da primeira leitura utilizável (<= PRECISAO_MAX_M) mas ainda longe
+  // de boa, dá-se esta janela curta para aparecer uma melhor. Sem ela, bastava
+  // uma leitura de 99 m para fixar a posição inicial do condutor quando o GPS
+  // estava prestes a entregar uma de 10 m.
+  const GRACA_PRECISAO_MS = 4000;
+  // Deriva do GPS a parado: um "salto" menor do que o raio de erro de uma
+  // leitura que piorou não é deslocação real. Limitado a este valor para nunca
+  // engolir movimento verdadeiro quando o erro reportado é grande.
+  const LIMITE_RUIDO_M = 20;
 
   function haversine(lat1, lng1, lat2, lng2) {
     const R = 6371000;
@@ -47,7 +57,7 @@
         </div>
         <h3 class="kg-geo-overlay__title">Localização necessária</h3>
         <p class="kg-geo-overlay__text">Para usar o V-MILLION, precisa de ativar a localização do seu dispositivo. Vá a Definições &gt; Localização e ative-a.</p>
-        <button type="button" class="kg-btn kg-btn--primario kg-btn--full" id="kg-geo-retry">Tentar novamente</button>
+        <button type="button" class="vm-btn vm-btn--primario vm-btn--full" id="kg-geo-retry">Tentar novamente</button>
       </div>`;
     overlay.style.display = 'flex';
     document.getElementById('kg-geo-retry').addEventListener('click', onRetry);
@@ -85,29 +95,61 @@
   function aguardarMelhorPrecisao(posInicial, onGranted) {
     showAguardandoPrecisao();
     let resolvido = false;
+    // A melhor leitura vista até agora, e não a primeira: ao fim do tempo
+    // limite entregava-se posInicial mesmo quando entretanto tinham chegado
+    // leituras bastante melhores (só ainda não boas o suficiente para passar
+    // o teto) — a posição inicial do condutor ficava a ser a pior de todas.
+    let melhor = posInicial;
+    let gracaId = null;
+    const precisaoDe = (pos) => (pos && pos.coords.accuracy != null ? pos.coords.accuracy : Infinity);
     const resolver = (pos) => {
       if (resolvido) return;
       resolvido = true;
       clearTimeout(timeoutId);
+      clearTimeout(gracaId);
       navigator.geolocation.clearWatch(watchId);
       hideOverlay();
       onGranted(pos);
     };
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
-        if (pos.coords.accuracy == null || pos.coords.accuracy <= PRECISAO_MAX_M) resolver(pos);
+        const precisao = pos.coords.accuracy;
+        if (precisao == null) { resolver(pos); return; }
+        if (precisao < precisaoDe(melhor)) melhor = pos;
+        if (precisao <= PRECISAO_BOA_M) { resolver(pos); return; }
+        // Já dá para trabalhar, mas ainda não é um fix de GPS a sério: espera
+        // GRACA_PRECISAO_MS por algo melhor e segue com o melhor que houver.
+        if (precisao <= PRECISAO_MAX_M && gracaId === null) {
+          gracaId = setTimeout(() => resolver(melhor), GRACA_PRECISAO_MS);
+        }
       },
-      () => { /* mantém a tentar — já há posInicial como rede de segurança no timeout */ },
+      () => { /* mantém a tentar — já há 'melhor' como rede de segurança no timeout */ },
       { enableHighAccuracy: true, maximumAge: 0, timeout: PRECISAO_TIMEOUT_MS }
     );
-    const timeoutId = setTimeout(() => resolver(posInicial), PRECISAO_TIMEOUT_MS);
+    const timeoutId = setTimeout(() => resolver(melhor), PRECISAO_TIMEOUT_MS);
   }
+
+  // Estado partilhado por toda a página, e nao por chamada: kgEnsureGeolocation
+  // e re-chamada pelo botao "Tentar novamente" e pela mudanca de permissao, e
+  // cada chamada criava um PermissionStatus novo (com o onchange antigo ainda
+  // pendurado) e podia deixar uma cadeia de retry anterior a correr em
+  // paralelo — resultado: onGranted a disparar duas vezes e dois
+  // watchPosition ativos ao mesmo tempo.
+  let permStatus = null;
+  let onGrantedAtual = null;
+  let retryTimeoutId = null;
 
   /**
    * Garante que a geolocalização está disponível antes de liberar o painel.
    * @param {(pos: GeolocationPosition) => void} onGranted
    */
   function kgEnsureGeolocation(onGranted) {
+    onGrantedAtual = onGranted;
+    if (retryTimeoutId !== null) {
+      clearTimeout(retryTimeoutId);
+      retryTimeoutId = null;
+    }
+
     if (!('geolocation' in navigator)) {
       console.warn('V-MILLION GPS: navigator.geolocation indisponível neste browser/contexto (ex: página servida sem HTTPS — a API só funciona em contexto seguro).');
       showOverlay(() => kgEnsureGeolocation(onGranted));
@@ -123,7 +165,7 @@
             return;
           }
           hideOverlay();
-          onGranted(pos);
+          onGrantedAtual(pos);
         },
         (err) => {
           console.warn('V-MILLION GPS: erro ao obter posição, code =', err.code, err.message);
@@ -138,7 +180,7 @@
             showOverlay(tryGetPosition);
           } else {
             showAguardandoPrecisao();
-            setTimeout(tryGetPosition, 3000);
+            retryTimeoutId = setTimeout(tryGetPosition, 3000);
           }
         },
         // enableHighAccuracy pode demorar bastante a obter o primeiro fix de
@@ -150,15 +192,28 @@
     };
 
     if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+      const aplicar = (status) => {
         if (status.state === 'denied') {
-          showOverlay(() => kgEnsureGeolocation(onGranted));
+          showOverlay(() => kgEnsureGeolocation(onGrantedAtual));
           return;
         }
         tryGetPosition();
+      };
+
+      // Reutiliza o PermissionStatus ja obtido — o onchange so e registado
+      // uma vez, senao cada "Tentar novamente" somava mais um handler a
+      // disparar o overlay.
+      if (permStatus) {
+        aplicar(permStatus);
+        return;
+      }
+
+      navigator.permissions.query({ name: 'geolocation' }).then((status) => {
+        permStatus = status;
         status.onchange = () => {
-          if (status.state === 'denied') showOverlay(() => kgEnsureGeolocation(onGranted));
+          if (status.state === 'denied') showOverlay(() => kgEnsureGeolocation(onGrantedAtual));
         };
+        aplicar(status);
       }).catch(tryGetPosition);
     } else {
       tryGetPosition();
@@ -173,33 +228,73 @@
    * seguinte, que alimentava o marcador no mapa e o POST para o servidor
    * sem nenhum filtro, deixando passar qualquer leitura má no meio da
    * sessão), e usando a última posição BOA conhecida se o sinal se perder.
-   * @param {(lat:number, lng:number, pos:GeolocationPosition) => void} onUpdate
+   *
+   * O 4.º argumento de onUpdate diz se a posição é uma reemissão da última
+   * posição conhecida por perda de sinal ({ obsoleta: true }). Serve para o
+   * mapa continuar a mostrar um marcador sem que essa coordenada velha seja
+   * enviada ao servidor como se fosse a posição atual do veículo.
+   *
+   * @param {(lat:number, lng:number, pos:GeolocationPosition, info:{obsoleta:boolean}) => void} onUpdate
+   * @param {{onLeituraBruta?: (lat:number, lng:number, pos:GeolocationPosition) => void}} [opts]
+   *   'onLeituraBruta' recebe TODAS as leituras que passam o teto de precisão,
+   *   sem o filtro dos 5 m nem o de deriva. Serve para desenhar o ponto do GPS
+   *   exatamente onde a última leitura o põe: os filtros existem para decidir
+   *   (enviar ao servidor, recalcular rota, medir rumo), onde uma leitura a
+   *   mais custa caro, mas aplicados também ao desenho deixavam o ponto
+   *   parado até 5 m atrás do sítio onde o condutor está mesmo.
    * @returns {number} watchId (usar com navigator.geolocation.clearWatch)
    */
-  function kgWatchPosition(onUpdate) {
+  function kgWatchPosition(onUpdate, opts = {}) {
+    const onLeituraBruta = typeof opts.onLeituraBruta === 'function' ? opts.onLeituraBruta : null;
     let ultimaLat = null;
     let ultimaLng = null;
+    let ultimaPrecisao = null;
     let ultimaPosConhecida = null;
+    let perdaDeSinalEmitida = false;
 
     return navigator.geolocation.watchPosition(
       (pos) => {
-        if (pos.coords.accuracy != null && pos.coords.accuracy > PRECISAO_MAX_M) return;
+        const precisao = pos.coords.accuracy;
+        if (precisao != null && precisao > PRECISAO_MAX_M) return;
         const { latitude, longitude } = pos.coords;
+        // Antes de qualquer filtro: a leitura passou o teto de precisão, logo
+        // é a melhor ideia disponível de onde o utilizador está agora.
+        if (onLeituraBruta) onLeituraBruta(latitude, longitude, pos);
         if (ultimaLat !== null) {
           const dist = haversine(ultimaLat, ultimaLng, latitude, longitude);
           if (dist < MIN_DIST_M) return;
+          // Deriva do GPS: uma leitura MENOS precisa do que a anterior que
+          // "anda" menos do que o seu próprio raio de erro não descreve
+          // deslocação nenhuma — é o marcador a tremer à volta do sítio onde o
+          // condutor está mesmo parado. O teto de LIMITE_RUIDO_M garante que
+          // isto nunca engole movimento a sério: a 50 km/h percorrem-se ~14 m
+          // por segundo, e um erro reportado grande não pode servir de
+          // desculpa para ignorar a estrada inteira.
+          if (precisao != null && ultimaPrecisao != null && precisao > ultimaPrecisao
+              && dist < Math.min(precisao, LIMITE_RUIDO_M)) return;
         }
         ultimaLat = latitude;
         ultimaLng = longitude;
+        ultimaPrecisao = precisao;
         ultimaPosConhecida = pos;
-        onUpdate(latitude, longitude, pos);
+        perdaDeSinalEmitida = false;
+        onUpdate(latitude, longitude, pos, { obsoleta: false });
       },
       () => {
-        if (ultimaPosConhecida) {
-          onUpdate(ultimaPosConhecida.coords.latitude, ultimaPosConhecida.coords.longitude, ultimaPosConhecida);
-        }
+        // Sinal perdido: o watchPosition volta a chamar isto a cada timeout
+        // (10s) enquanto não houver fix. Reemitir a última posição boa serve
+        // só para o mapa não ficar sem marcador, por isso é feito UMA vez por
+        // perda de sinal e marcado como obsoleto — antes, cada repetição
+        // seguia para o servidor e mantinha o veículo "vivo" numa coordenada
+        // que ele já tinha deixado há muito.
+        if (!ultimaPosConhecida || perdaDeSinalEmitida) return;
+        perdaDeSinalEmitida = true;
+        onUpdate(ultimaPosConhecida.coords.latitude, ultimaPosConhecida.coords.longitude, ultimaPosConhecida, { obsoleta: true });
       },
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+      // maximumAge 0 (era 2000): com cache, o browser podia devolver a mesma
+      // leitura de há 2 s como se fosse nova — a posição desenhada no mapa
+      // ficava sistematicamente atrás da real, que a 50 km/h são ~28 m.
+      { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
     );
   }
 

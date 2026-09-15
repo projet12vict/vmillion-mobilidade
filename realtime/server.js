@@ -93,6 +93,21 @@ io.on('connection', (socket) => {
     io.emit('urbano:reclamado', payload);
   });
 
+  // Passageiro pede viagem escolhendo só o ponto -> o pedido é de todos os
+  // condutores desse ponto. Broadcast pela mesma razão do evento acima: o
+  // condutor não tem sala por ponto, filtra pelo pontoId do payload.
+  socket.on('pedido:ponto', (payload) => {
+    if (!payload || typeof payload.pontoId === 'undefined') return;
+    io.emit('pedido:ponto', payload);
+  });
+
+  // Condutor reclama um pedido do ponto -> os outros condutores do mesmo
+  // ponto tiram-no já da lista, sem esperar pelo próximo poll.
+  socket.on('pedido:reclamado', (payload) => {
+    if (!payload || typeof payload.reservaId === 'undefined') return;
+    io.emit('pedido:reclamado', payload);
+  });
+
   // SOS -> notifica a central de alarmes (admin) em tempo real.
   socket.on('sos:ativado', (payload) => {
     io.to('admin:sos').emit('sos:ativado', payload);
@@ -102,9 +117,14 @@ io.on('connection', (socket) => {
     io.emit('sos:atualizado', payload);
   });
 
-  // Chamada simulada (visual + sonora) entre passageiro e condutor — sem
-  // áudio real (não há WebRTC aqui), só o sinal de estado (a chamar,
-  // recebida, atendida, recusada, desligada) para a app do outro lado.
+  // Chamada entre passageiro e condutor: aqui passa só o sinal de estado
+  // (a chamar, atendida, recusada, desligada) para a app do outro lado.
+  //
+  // O áudio é WebRTC ponto-a-ponto e não passa por este servidor; a própria
+  // sinalização (oferta/resposta SDP + candidatos ICE) também não, vai por
+  // HTTP em /api/chamada/sinalizar. Este relay é apenas um acelerador do
+  // polling de 4s do kg-chamada.js — a fonte de verdade é o estado em BD,
+  // por isso a chamada funciona na mesma com este serviço desligado.
   ['chamada:iniciar', 'chamada:atender', 'chamada:recusar', 'chamada:desligar'].forEach((evento) => {
     socket.on(evento, (payload) => {
       if (!payload || typeof payload.paraUtilizadorId === 'undefined') return;

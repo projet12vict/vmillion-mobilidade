@@ -76,7 +76,7 @@
         ['veiculo:posicao', 'veiculo:lugares', 'reserva:nova', 'reserva:atualizada',
          'sos:ativado', 'sos:atualizado', 'comunicacao:nova', 'notificacao:nova',
          'chamada:iniciar', 'chamada:atender', 'chamada:recusar', 'chamada:desligar',
-         'urbano:reclamado']
+         'urbano:reclamado', 'pedido:ponto', 'pedido:reclamado']
           .forEach((evento) => socket.on(evento, (payload) => emitLocal(evento, payload)));
       } catch (e) {
         iniciarPolling();

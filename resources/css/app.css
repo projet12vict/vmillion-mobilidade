@@ -1,0 +1,744 @@
+@import 'tailwindcss';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+/*
+| Tema V-MILLION
+|--------------------------------------------------------------------------
+| As cores são as mesmas da secção 15 da especificação (ver
+| public/assets/css/kg-design-system.css), reescritas como escalas para o
+| Tailwind: brand = azul institucional (#003893), gold = CTA (#F7D116),
+| accent = ciano dos elementos de mapa (#00B4D8).
+*/
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+        'Segoe UI Symbol', 'Noto Color Emoji';
+
+    --color-brand-50: #eff5ff;
+    --color-brand-100: #dbe7fe;
+    --color-brand-200: #bfd4fe;
+    --color-brand-300: #93b8fd;
+    --color-brand-400: #6094fa;
+    --color-brand-500: #3b70f6;
+    --color-brand-600: #2554eb;
+    --color-brand-700: #1a56b0;
+    --color-brand-800: #003893;
+    --color-brand-900: #002a6e;
+    --color-brand-950: #00194a;
+
+    --color-gold-100: #fef6d0;
+    --color-gold-200: #fdec9c;
+    --color-gold-300: #fbe163;
+    --color-gold-400: #f9d938;
+    --color-gold-500: #f7d116;
+    --color-gold-600: #e6c200;
+    --color-gold-700: #b89a00;
+
+    --color-accent-400: #38cdec;
+    --color-accent-500: #00b4d8;
+    --color-accent-600: #0091b0;
+
+    --animate-float: float 7s ease-in-out infinite;
+    --animate-pulse-ring: pulse-ring 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    --animate-marquee: marquee 38s linear infinite;
+
+    @keyframes float {
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-14px);
+        }
+    }
+
+    @keyframes pulse-ring {
+        0% {
+            transform: scale(0.6);
+            opacity: 0.7;
+        }
+        70%,
+        100% {
+            transform: scale(2.2);
+            opacity: 0;
+        }
+    }
+
+    @keyframes marquee {
+        from {
+            transform: translateX(0);
+        }
+        to {
+            transform: translateX(-50%);
+        }
+    }
+}
+
+/* Rede de segurança contra scroll horizontal: basta um elemento exceder a
+   largura por poucos píxeis para o telemóvel ganhar barra horizontal. */
+html {
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(5.5rem + env(safe-area-inset-top));
+
+    /* iPhone: sem isto o Safari aumenta por conta própria o corpo do texto
+       ao rodar para paisagem, e as medidas do desenho deixam de bater certo
+       com as do tipo de letra. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+
+    /* Android: o Chrome recarrega a página com um arrasto para baixo a
+       partir do topo. Num painel com viagem a decorrer (mapa, GPS ligado,
+       conversa com o condutor) esse recarregamento é sempre acidental e
+       custa o estado todo — e o topo do painel do passageiro é justamente
+       o mapa, onde se arrasta o tempo inteiro. */
+    overscroll-behavior-y: contain;
+}
+
+body {
+    /* O retângulo cinzento que o Chrome/WebView pinta em cada toque é ruído
+       num ecrã cheio de botões encostados; o estado de foco continua a ser
+       desenhado pelos :focus-visible de cada componente. */
+    -webkit-tap-highlight-color: transparent;
+}
+
+/*
+| Áreas seguras do telemóvel
+|--------------------------------------------------------------------------
+| Os cinco documentos declaram viewport-fit=cover (e, no iPhone em modo PWA,
+| uma barra de estado translúcida), pelo que o documento ocupa o ecrã todo
+| — incluindo a faixa do notch/ilha dinâmica, a barra de gestos do Android
+| e, em paisagem, o recorte lateral. Estas classes devolvem esse espaço ao
+| conteúdo. Num ecrã sem recortes env() vale 0 e nada muda.
+|
+| A medida base vai numa variável para poder mudar por breakpoint sem
+| perder o env(): sm:[--px-seguro:1.5rem] em vez de um sm:px-6 que apagava
+| o max() inteiro.
+*/
+@utility pt-seguro {
+    padding-top: calc(var(--pt-seguro, 0rem) + env(safe-area-inset-top));
+}
+
+@utility pb-seguro {
+    padding-bottom: calc(var(--pb-seguro, 0rem) + env(safe-area-inset-bottom));
+}
+
+@utility px-seguro {
+    padding-left: max(var(--px-seguro, 1rem), env(safe-area-inset-left));
+    padding-right: max(var(--px-seguro, 1rem), env(safe-area-inset-right));
+}
+
+@utility top-seguro {
+    top: calc(var(--top-seguro, 0rem) + env(safe-area-inset-top));
+}
+
+/* Entrada progressiva das secções — o estado inicial só é aplicado quando o
+   JS está vivo (html.js), para a página continuar legível sem JavaScript. */
+.js [data-revelar] {
+    opacity: 0;
+    transform: translateY(28px);
+    transition:
+        opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.js [data-revelar].e-visivel {
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html {
+        scroll-behavior: auto;
+    }
+
+    .js [data-revelar] {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/*
+| Formulários
+|--------------------------------------------------------------------------
+| Os ecrãs de autenticação repetem o mesmo campo dezenas de vezes; mantê-los
+| como classes evita arrastar vinte utilitários por cada <input>. As mensagens
+| de erro vivem em <span> sempre presentes no HTML (o JS só lhes escreve o
+| texto), por isso escondem-se enquanto estiverem vazias.
+*/
+@layer components {
+    .campo {
+        @apply mb-4;
+    }
+
+    .campo-etiqueta {
+        @apply mb-1.5 block text-sm font-semibold text-slate-700;
+    }
+
+    .campo-input {
+        @apply w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-slate-900 shadow-sm outline-none transition;
+        @apply placeholder:text-slate-400 hover:border-slate-400;
+        @apply focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15;
+    }
+
+    .campo-erro {
+        @apply mt-1.5 block text-sm font-medium text-red-600;
+    }
+
+    .campo-erro:empty {
+        @apply hidden;
+    }
+
+    /* Campo de senha com botão de mostrar/esconder (x-campo-senha). O botão
+       fica dentro da moldura do .campo-input, daí o pr-12 no input: sem ele o
+       olho tapava o fim da senha em ecrãs estreitos. */
+    .campo-senha {
+        @apply relative;
+    }
+
+    /* Seletor descendente de propósito: o componente também serve os painéis,
+       onde o input é .vm-input — e essa regra vem mais abaixo neste ficheiro,
+       pelo que um simples .campo-senha-input perdia o padding-right para ela. */
+    .campo-senha > .campo-senha-input {
+        @apply pr-12;
+    }
+
+    .campo-senha-olho {
+        @apply absolute inset-y-0 right-0 grid w-12 cursor-pointer place-items-center rounded-r-xl text-slate-400 outline-none transition;
+        @apply hover:text-slate-600 focus-visible:text-brand-700;
+    }
+
+    .campo-senha-olho:focus-visible {
+        @apply ring-2 ring-inset ring-brand-600/40;
+    }
+
+    /* O 'hidden' que troca os dois ícones tem de ser escondido aqui: a regra
+       [hidden] do browser vale só para elementos HTML (o html.css do Chrome
+       declara o namespace XHTML), e estes ícones são <svg> — sem esta regra
+       ficavam os dois sobrepostos. */
+    .campo-senha-olho [data-senha-icone][hidden] {
+        @apply hidden;
+    }
+
+    /* Campo de telefone com seletor de país (x-campo-telefone). O grupo
+       desenha a moldura que o .campo-input desenharia sozinho: dentro dele o
+       botão do país e o input do número não têm borda própria, para que os
+       dois se leiam como um só campo — incluindo no foco, daí o
+       :focus-within. */
+    .campo-tel {
+        @apply relative;
+    }
+
+    .campo-tel-grupo {
+        @apply flex items-stretch rounded-xl border border-slate-300 bg-white shadow-sm transition;
+        @apply hover:border-slate-400;
+    }
+
+    .campo-tel-grupo:focus-within {
+        @apply border-brand-600 ring-4 ring-brand-600/15;
+    }
+
+    .campo-tel-botao {
+        @apply flex shrink-0 cursor-pointer items-center gap-2 rounded-l-xl border-r border-slate-200 px-3.5 py-3 font-medium text-slate-900 outline-none transition;
+        @apply hover:bg-slate-50;
+    }
+
+    .campo-tel-indicativo {
+        @apply tabular-nums;
+    }
+
+    .campo-tel-bandeira {
+        @apply text-lg leading-none;
+    }
+
+    .campo-tel-numero {
+        @apply w-full min-w-0 rounded-r-xl bg-transparent px-4 py-3 text-slate-900 outline-none;
+        @apply placeholder:text-slate-400;
+    }
+
+    .campo-tel-painel {
+        @apply absolute inset-x-0 top-full z-30 mt-2 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10;
+    }
+
+    .campo-tel-pesquisa {
+        @apply w-full border-b border-slate-200 px-4 py-3 text-sm text-slate-900 outline-none;
+        @apply placeholder:text-slate-400;
+    }
+
+    /* 16rem chega para ~6 países: o painel abre por cima do resto do
+       formulário e não deve tapar o botão de submeter no telemóvel. */
+    .campo-tel-lista {
+        @apply max-h-64 overflow-y-auto py-1;
+    }
+
+    .campo-tel-opcao {
+        @apply flex cursor-pointer items-center gap-3 px-4 py-2.5 text-sm text-slate-700;
+    }
+
+    /* .ativa é a opção sob o teclado (setas); aria-selected é o país escolhido.
+       São coisas diferentes e podem estar em opções diferentes. */
+    .campo-tel-opcao.ativa {
+        @apply bg-brand-50 text-brand-900;
+    }
+
+    .campo-tel-opcao[aria-selected="true"] {
+        @apply font-semibold text-brand-800;
+    }
+
+    .campo-tel-nome {
+        @apply flex-1 truncate;
+    }
+
+    .campo-tel-dial {
+        @apply shrink-0 tabular-nums text-slate-400;
+    }
+
+    .campo-tel-vazio {
+        @apply px-4 py-3 text-sm text-slate-500;
+    }
+
+    .msg-geral {
+        @apply mb-4 rounded-xl bg-red-50 px-4 py-3 text-center text-sm font-medium text-red-700 ring-1 ring-red-100;
+    }
+
+    .msg-geral:empty {
+        @apply hidden;
+    }
+
+    .msg-geral.e-sucesso {
+        @apply bg-emerald-50 text-emerald-700 ring-emerald-100;
+    }
+
+    .botao-principal {
+        @apply w-full rounded-xl bg-brand-800 px-6 py-3.5 text-base font-bold text-white shadow-lg shadow-brand-800/20 transition;
+        @apply hover:bg-brand-900 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600;
+        @apply disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none;
+    }
+
+    .botao-cta {
+        @apply w-full rounded-xl bg-gold-500 px-6 py-3.5 text-base font-bold text-brand-900 shadow-lg shadow-gold-600/20 transition;
+        @apply hover:bg-gold-400 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-600;
+        @apply disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none;
+    }
+
+    /* Seletor segmentado passageiro/condutor. A classe .ativo é aplicada pelo
+       JS da página de registo. */
+    .tipo-botao {
+        @apply rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-500 transition;
+        @apply hover:text-slate-700;
+    }
+
+    .tipo-botao.ativo {
+        @apply bg-white text-brand-800 shadow-sm;
+    }
+}
+
+/* Grelha subtil do herói, desenhada em CSS para não pesar num pedido extra. */
+@utility grelha-mapa {
+    background-image:
+        linear-gradient(to right, rgb(255 255 255 / 0.055) 1px, transparent 1px),
+        linear-gradient(to bottom, rgb(255 255 255 / 0.055) 1px, transparent 1px);
+    background-size: 56px 56px;
+}
+
+/*
+| Componentes dos painéis (vm-*)
+|--------------------------------------------------------------------------
+| Os três painéis (admin, passageiro, condutor) deixaram de carregar o
+| kg-design-system.css (legado) e passam a viver no mesmo tema da página
+| inicial. Botões, campos, tabelas e badges repetem-se lá às centenas — e
+| boa parte é escrita em JavaScript, dentro de template strings — por isso
+| ficam como classes, pela mesma razão que os campos dos ecrãs de
+| autenticação acima: arrastar vinte utilitários por cada <td> tornava
+| aqueles ficheiros ilegíveis.
+|
+| O prefixo vm- marca o que é partilhado pelos três painéis (e pelo
+| kg-chamada.js/kg-geolocation.js, que também desenham estes botões). O que
+| é só de um painel fica com o prefixo desse painel: adm- (administração),
+| pass- (passageiro), cond- (condutor).
+*/
+@layer components {
+    /* Barra de topo dos painéis. Mantém 4rem de conteúdo útil e cresce com a
+       faixa da barra de estado: em PWA no iPhone (apple-mobile-web-app-
+       status-bar-style black-translucent) o documento começa no topo
+       absoluto do ecrã e, sem esta faixa, o logótipo e os botões ficavam por
+       baixo da hora e da bateria. A altura vem daqui, e não de um h-16 no
+       HTML, porque as utilities são desenhadas depois desta camada e o h-16
+       cortaria a faixa de volta. O padding lateral fica no HTML (px-seguro),
+       que muda de painel para painel. */
+    .vm-barra {
+        padding-top: env(safe-area-inset-top);
+        height: calc(4rem + env(safe-area-inset-top));
+    }
+
+    .vm-h3 {
+        @apply mb-1 text-lg font-bold tracking-tight text-slate-900;
+    }
+
+    /* Ícone à frente de um .vm-h3. Fica inline (e não a tornar o próprio h3
+       em flex) para não mudar a quebra de linha de todos os títulos do
+       projeto por causa dos que levam ícone. */
+    .vm-h3-icone {
+        @apply mr-1.5 inline-block h-[1.05em] w-[1.05em] shrink-0 align-[-0.15em] text-slate-400;
+    }
+
+    .vm-small {
+        @apply text-sm leading-relaxed text-slate-500;
+    }
+
+    .vm-card {
+        @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-900/5 sm:p-6;
+    }
+
+    /* ---------- Botões ---------- */
+    .vm-btn {
+        @apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-5 align-middle text-sm font-semibold text-slate-700 transition;
+        @apply hover:border-slate-400 hover:bg-slate-50;
+        @apply focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600;
+        @apply disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    .vm-btn--primario {
+        @apply border-transparent bg-brand-800 text-white shadow-sm shadow-brand-800/20 hover:border-transparent hover:bg-brand-900;
+    }
+
+    .vm-btn--cta {
+        @apply border-transparent bg-gold-500 font-bold text-brand-900 shadow-sm shadow-gold-600/20 hover:border-transparent hover:bg-gold-400;
+    }
+
+    .vm-btn--perigo {
+        @apply border-transparent bg-red-600 text-white shadow-sm shadow-red-600/20 hover:border-transparent hover:bg-red-700;
+    }
+
+    .vm-btn--outline {
+        @apply border-brand-800/30 bg-white text-brand-800 hover:border-brand-800 hover:bg-brand-50;
+    }
+
+    .vm-btn--ghost {
+        @apply border-transparent bg-transparent text-slate-600 hover:border-transparent hover:bg-slate-100 hover:text-slate-900;
+    }
+
+    /* Abaixo de sm volta aos 44px: nas listas de ações (Aprovar/Recusar/
+       Eliminar) o alvo de toque conta mais do que a compactação. */
+    .vm-btn--sm {
+        @apply min-h-11 px-3 text-xs sm:min-h-9;
+    }
+
+    .vm-btn--full {
+        @apply w-full;
+    }
+
+    /* ---------- Campos ---------- */
+    .vm-field {
+        @apply mb-4 flex flex-col gap-1.5;
+    }
+
+    .vm-label {
+        @apply text-sm font-semibold text-slate-700;
+    }
+
+    .vm-input,
+    .vm-select {
+        @apply w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-sm outline-none transition;
+        @apply placeholder:text-slate-400 hover:border-slate-400;
+        @apply focus:border-brand-600 focus:ring-4 focus:ring-brand-600/15;
+    }
+
+    textarea.vm-input {
+        @apply min-h-24 resize-y;
+    }
+
+    .vm-erro {
+        @apply mb-2 text-sm font-medium text-red-600;
+    }
+
+    .vm-erro:empty {
+        @apply hidden;
+    }
+
+    .vm-erro.e-sucesso {
+        @apply text-emerald-600;
+    }
+
+    /* ---------- Badges de estado ---------- */
+    .vm-badge {
+        @apply inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-bold text-slate-700 ring-1 ring-inset ring-slate-200;
+    }
+
+    .vm-badge--pendente {
+        @apply bg-amber-50 text-amber-700 ring-amber-200;
+    }
+
+    .vm-badge--confirmado {
+        @apply bg-emerald-50 text-emerald-700 ring-emerald-200;
+    }
+
+    .vm-badge--recusado {
+        @apply bg-red-50 text-red-700 ring-red-200;
+    }
+
+    /* Estados da reserva no painel do condutor. */
+    .vm-badge--a_caminho {
+        @apply bg-sky-50 text-sky-700 ring-sky-200;
+    }
+
+    .vm-badge--a_bordo {
+        @apply bg-accent-500/10 text-accent-600 ring-accent-500/25;
+    }
+
+    .vm-badge--concluido {
+        @apply bg-slate-100 text-slate-600 ring-slate-200;
+    }
+
+    /* ---------- Tabelas ---------- */
+    /* overscroll-x-contain: a tabela é mais larga do que qualquer telemóvel
+       e arrasta-se de lado o tempo todo. Sem isto, chegar ao fim do arrasto
+       passava o gesto ao browser — que o lê como "recuar"/"avançar" no
+       histórico (iOS e Android) e deitava fora o painel. */
+    .vm-tabela-wrap {
+        @apply w-full overflow-x-auto overscroll-x-contain rounded-2xl border border-slate-200 bg-white shadow-sm shadow-slate-900/5;
+    }
+
+    .vm-tabela {
+        @apply w-full min-w-[480px] border-collapse bg-white text-sm sm:min-w-[560px];
+    }
+
+    .vm-tabela th {
+        @apply sticky top-0 z-10 whitespace-nowrap border-b border-slate-200 bg-slate-50 px-4 py-3 text-left text-xs font-bold uppercase tracking-wider text-slate-500;
+    }
+
+    .vm-tabela td {
+        @apply whitespace-nowrap border-b border-slate-100 px-4 py-3 text-left align-middle text-slate-700;
+    }
+
+    .vm-tabela tbody tr:last-child td {
+        @apply border-b-0;
+    }
+
+    .vm-tabela tbody tr:hover {
+        @apply bg-slate-50;
+    }
+
+    /* ---------- Navegação lateral ---------- */
+    .adm-nav-item {
+        @apply flex cursor-pointer items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-white/80 transition;
+        @apply hover:bg-white/10 hover:text-white;
+    }
+
+    .adm-nav-item.ativo {
+        @apply bg-white text-brand-800 shadow-lg shadow-brand-950/25 hover:bg-white hover:text-brand-800;
+    }
+
+    /* O ícone é um <svg> que herda a cor do item (currentColor), por isso
+       acompanha sozinho o estado inativo/ativo — era isso que os emoji, com
+       paleta própria, nunca conseguiam fazer. */
+    .adm-nav-icon {
+        @apply h-5 w-5 shrink-0;
+    }
+
+    .adm-nav-item .adm-nav-icon {
+        @apply text-white/60 transition;
+    }
+
+    .adm-nav-item:hover .adm-nav-icon {
+        @apply text-white/90;
+    }
+
+    .adm-nav-item.ativo .adm-nav-icon {
+        @apply text-brand-700;
+    }
+
+    /* Só a secção do item ativo é desenhada — a troca é feita pelo JS. */
+    .adm-secao {
+        @apply hidden;
+    }
+
+    .adm-secao.ativa {
+        @apply block;
+    }
+
+    /* ---------- Cartões de indicadores ---------- */
+    /* Cartões do dashboard. O fundo é neutro por omissão e só ganha cor
+       quando há trabalho à espera (pendentes > 0) — ver TONS/META no painel.
+       A versão anterior punha uma barra lateral colorida em todos, o que
+       deixava treze cartões com o mesmo peso visual e nada a saltar. */
+    .adm-stat-grupo {
+        @apply mb-3 text-xs font-bold uppercase tracking-wider text-slate-400;
+    }
+
+    /* items-start e não items-center: os rótulos longos ('Condutores
+       pendentes') passam a duas linhas e, centrados, deixavam os ícones da
+       mesma fila a saltar de altura uns em relação aos outros. */
+    .adm-stat {
+        @apply flex items-start gap-3.5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-900/5;
+    }
+
+    .adm-stat-icone {
+        @apply grid h-10 w-10 shrink-0 place-items-center rounded-xl;
+    }
+
+    .adm-stat-num {
+        @apply block text-2xl font-bold leading-none tracking-tight tabular-nums text-slate-900;
+    }
+
+    .adm-stat-rotulo {
+        @apply mt-1 block text-sm leading-snug text-slate-500;
+    }
+
+    /* ---------- Modais ---------- */
+    /* O display (none/flex) é posto pelo JS em style inline — aqui fica só o
+       resto. Em ecrã pequeno o cartão encosta ao fundo, como no desenho
+       anterior, para ficar ao alcance do polegar. */
+    .vm-modal-overlay {
+        @apply fixed inset-0 z-1000 items-end justify-center bg-slate-900/50 backdrop-blur-sm sm:items-center sm:p-4;
+    }
+
+    /* 90dvh e não 90vh: no iPhone o vh mede a janela com a barra do Safari
+       recolhida, pelo que 90vh podia ser mais alto do que o ecrã realmente
+       visível e escondia o botão de confirmar por baixo da barra. */
+    .vm-modal {
+        @apply max-h-[90dvh] w-full max-w-lg overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-6 shadow-2xl sm:rounded-3xl;
+        /* Encostado ao fundo do ecrã (items-end abaixo do sm), o último botão
+           do cartão caía na barra de gestos do iPhone/Android. A partir do sm
+           o cartão fica centrado e o acréscimo deixa de fazer sentido. */
+        padding-bottom: calc(1.5rem + env(safe-area-inset-bottom));
+    }
+
+    @media (min-width: 40rem) {
+        .vm-modal {
+            padding-bottom: 1.5rem;
+        }
+    }
+
+    /* ---------- Toasts ---------- */
+    /* min-w em vw abaixo do sm: 280px fixos mais as margens do contentor
+       transbordavam num ecrã de 320px (iPhone SE de 1.ª geração, Android de
+       entrada) e punham barra horizontal na página inteira. */
+    .vm-toast {
+        @apply w-[min(20rem,calc(100vw-2rem))] rounded-xl border-l-4 border-brand-800 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-lg shadow-slate-900/10 sm:w-80;
+    }
+
+    .vm-toast--sucesso {
+        @apply border-emerald-500;
+    }
+
+    .vm-toast--erro {
+        @apply border-red-600;
+    }
+}
+
+/*
+| Painel do passageiro e do condutor
+|--------------------------------------------------------------------------
+| O que estes dois painéis usam e o painel de administração não: a grelha de
+| assentos da Hiace, o esqueleto de carregamento e a variante de botão que
+| vive sobre a barra azul do topo.
+*/
+@layer components {
+    /* Botão sobre fundo escuro (barra de topo dos painéis). */
+    .vm-btn--claro {
+        @apply border-transparent bg-transparent text-white hover:border-transparent hover:bg-white/15 hover:text-white;
+        @apply focus-visible:outline-white/70;
+    }
+
+    /* ---------- Assentos (5 filas x 3 lugares) ---------- */
+    .vm-assentos {
+        @apply grid gap-2 rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200;
+    }
+
+    .vm-assentos__fila {
+        @apply grid grid-cols-3 gap-2;
+    }
+
+    /* A fila do condutor tem o volante no lugar de um dos assentos. */
+    .vm-assentos__fila--condutor {
+        @apply opacity-70;
+    }
+
+    /* touch-manipulation: sem isto o browser espera ~300ms por um eventual
+       duplo toque (zoom) antes de entregar o clique, e numa grelha de quinze
+       lugares o toque parecia não responder. */
+    .vm-assento {
+        @apply flex min-h-11 cursor-pointer touch-manipulation items-center justify-center rounded-lg border-2 border-slate-200 bg-white text-sm font-semibold text-slate-700 transition;
+    }
+
+    .vm-assento--livre {
+        @apply border-emerald-500 bg-emerald-50 text-emerald-800 hover:bg-emerald-100;
+    }
+
+    .vm-assento--ocupado {
+        @apply cursor-not-allowed border-slate-200 bg-slate-200 text-slate-400;
+    }
+
+    .vm-assento--selecionado {
+        @apply border-brand-800 bg-brand-800 text-white outline-2 outline-offset-1 outline-brand-800;
+    }
+
+    /* Lugar que o condutor retirou (botão "Lugares" do painel): continua no
+       mapa dele, riscado, para o poder repor com um toque. */
+    .vm-assento--removido {
+        @apply border-dashed border-slate-300 bg-transparent text-slate-400 line-through hover:border-slate-400;
+    }
+
+    /* Passageiro sem app (marcado pelo condutor em "Lugares"). */
+    .vm-assento--sem-app {
+        @apply border-amber-500 bg-amber-50 text-amber-800 hover:bg-amber-100;
+    }
+
+    /* ---------- Esqueleto de carregamento ---------- */
+    .vm-skeleton {
+        @apply rounded-xl;
+        background: linear-gradient(90deg, var(--color-slate-200) 25%, var(--color-slate-100) 37%, var(--color-slate-200) 63%);
+        background-size: 400% 100%;
+        animation: vm-skeleton 1.4s ease infinite;
+    }
+
+    @keyframes vm-skeleton {
+        0% {
+            background-position: 100% 50%;
+        }
+        100% {
+            background-position: 0 50%;
+        }
+    }
+}
+
+/*
+| Telemóvel — regras que têm de ganhar às camadas acima
+|--------------------------------------------------------------------------
+| Ficam fora de @layer de propósito: o CSS sem camada vence sempre qualquer
+| @layer, e é isso que é preciso para passar por cima do text-sm que o
+| .vm-input/.vm-select declara na camada components.
+*/
+
+/* O Safari do iPhone amplia a página inteira sempre que um campo com menos
+   de 16px ganha o foco — e não desfaz o zoom ao sair dele, deixando o painel
+   deslocado e com barra horizontal até se recarregar. Abaixo do sm todos os
+   controlos de texto passam a 16px; o desenho compacto fica para os ecrãs
+   com rato, onde o Safari não amplia nada. */
+@media (max-width: 39.99rem) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    select,
+    textarea {
+        font-size: 16px;
+    }
+}
+
+/* Enquanto um modal está aberto, o painel por trás deixa de rolar: no
+   telemóvel o cartão encosta ao fundo do ecrã e o arrasto por cima dele era
+   o gesto mais natural — e levava o mapa e a lista com ele. O seletor lê o
+   display:flex que o JS escreve em linha, que é como todos os modais destes
+   painéis abrem e fecham. Onde :has() não existir, nada acontece. */
+body:has(.vm-modal-overlay[style*='flex']) {
+    overflow: hidden;
+}

@@ -2,8 +2,8 @@
  * V-MILLION — Chamada com voz real (WebRTC) entre passageiro e condutor.
  *
  * O estado (iniciada/atendida/recusada/terminada) fica persistido em BD via
- * api/chamada/*.php (ver database/migration_20260810_chamadas.sql) — não só
- * em memória JS — porque o socket.io (realtime/server.js) nem sempre está a
+ * /api/chamada/* (Chamada\ChamadaController) — não só em memória JS —
+ * porque o socket.io (realtime/server.js) nem sempre está a
  * correr neste ambiente (mesmo problema que já tinha acontecido com o
  * autofalante). Um polling a cada 4s é a fonte de verdade; o socket.io, se
  * estiver ligado, só acelera isso (avisa "verifica agora" em vez de esperar
@@ -11,12 +11,18 @@
  *
  * O áudio é WebRTC ponto-a-ponto (RTCPeerConnection): o servidor nunca vê
  * nem guarda som, só a sinalização de texto (oferta/resposta SDP + ICE
- * candidates) via api/chamada/sinalizar.php e sinais.php — ver
- * database/migration_20260810_sinalizacao_chamada.sql. Essa troca usa um
+ * candidates) via /api/chamada/sinalizar e /api/chamada/sinais
+ * (Chamada\SinalizacaoController). Essa troca usa um
  * polling próprio, mais rápido (1s), só enquanto há uma ligação a
  * negociar/ativa — não o polling geral de 4s, que é lento de mais para ICE.
  * Se o microfone falhar (permissão recusada, sem hardware), a chamada
  * visual continua a funcionar na mesma — só fica sem áudio.
+ *
+ * Enquanto a chamada está atendida, o painel manda um pulso a cada 15s
+ * (/api/chamada/pulso) e, ao sair da página, um sendBeacon para
+ * /api/chamada/desligar. Sem isso, um refresh a meio da chamada deixava a
+ * linha 'atendida' na BD para sempre e os dois participantes ficavam
+ * permanentemente 'ocupados' — ver ChamadaService::expirarChamadasParadas().
  *
  * Uso (uma vez, no arranque do painel, depois de window.kgRt existir):
  *   KGChamada.configurar({ rt: window.kgRt, meuId: UTILIZADOR_ID, csrfToken: CSRF_TOKEN });
@@ -35,6 +41,7 @@
 
   const INTERVALO_POLL_MS = 4000;
   const INTERVALO_SINAIS_MS = 1000;
+  const INTERVALO_PULSO_MS = 15000;
   const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
 
   let rt = null;
@@ -42,6 +49,7 @@
   let csrfToken = null;
   let pollTimer = null;
   let sinalPollTimer = null;
+  let pulsoTimer = null;
 
   // inativa | a_chamar | a_receber | ativa | terminada
   let estado = 'inativa';
@@ -55,6 +63,7 @@
   let localStream = null;
   let ultimoSinalId = 0;
   let microfoneSilenciado = false;
+  let motivoSemAudio = '';
 
   function els() {
     return {
@@ -66,10 +75,21 @@
     };
   }
 
+  // A página pode oferecer um conjunto de ícones (window.svgIcone, alimentado
+  // por config/icones.php). Os painéis do condutor e do passageiro oferecem;
+  // onde não houver, fica o emoji de sempre em vez de um espaço vazio.
+  function porIcone(el, nome, alternativa) {
+    if (typeof window.svgIcone === 'function') {
+      el.innerHTML = window.svgIcone(nome, 'h-7 w-7');
+    } else {
+      el.textContent = alternativa;
+    }
+  }
+
   function botao(texto, classe, aoClicar) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = `kg-btn ${classe}`;
+    btn.className = `vm-btn ${classe}`;
     btn.textContent = texto;
     btn.addEventListener('click', aoClicar);
     return btn;
@@ -90,27 +110,27 @@
     e.acoes.innerHTML = '';
 
     if (estado === 'a_chamar') {
-      e.icone.textContent = '📞';
+      porIcone(e.icone, 'telefone', '📞');
       e.titulo.textContent = `A chamar ${outroNome}...`;
-      e.subtitulo.textContent = 'À espera que atenda.';
-      e.acoes.appendChild(botao('Desligar', 'kg-btn--perigo', desligar));
+      e.subtitulo.textContent = motivoSemAudio || 'À espera que atenda.';
+      e.acoes.appendChild(botao('Desligar', 'vm-btn--perigo', desligar));
     } else if (estado === 'a_receber') {
-      e.icone.textContent = '📲';
+      porIcone(e.icone, 'telefone_a_receber', '📲');
       e.titulo.textContent = `Chamada de ${outroNome}`;
       e.subtitulo.textContent = '';
-      e.acoes.appendChild(botao('Recusar', 'kg-btn--perigo', recusar));
-      e.acoes.appendChild(botao('Atender', 'kg-btn--cta', atender));
+      e.acoes.appendChild(botao('Recusar', 'vm-btn--perigo', recusar));
+      e.acoes.appendChild(botao('Atender', 'vm-btn--cta', atender));
     } else if (estado === 'ativa') {
-      e.icone.textContent = '🎧';
+      porIcone(e.icone, 'auscultadores', '🎧');
       e.titulo.textContent = `Em chamada com ${outroNome}`;
-      e.subtitulo.textContent = localStream ? '' : 'Sem microfone — só o outro lado te ouve, se tiver.';
-      e.acoes.appendChild(botao(microfoneSilenciado ? '🔇 Ativar microfone' : '🎤 Silenciar', 'kg-btn--outline', alternarMicrofone));
-      e.acoes.appendChild(botao('Desligar', 'kg-btn--perigo', desligar));
+      e.subtitulo.textContent = localStream ? '' : (motivoSemAudio || 'Sem áudio: a ligação de voz não chegou a abrir.');
+      e.acoes.appendChild(botao(microfoneSilenciado ? '🔇 Ativar microfone' : '🎤 Silenciar', 'vm-btn--outline', alternarMicrofone));
+      e.acoes.appendChild(botao('Desligar', 'vm-btn--perigo', desligar));
     } else if (estado === 'terminada') {
-      e.icone.textContent = '📴';
+      porIcone(e.icone, 'telefone_desligado', '📴');
       e.titulo.textContent = mensagemTerminada || 'Chamada terminada';
       e.subtitulo.textContent = '';
-      e.acoes.appendChild(botao('Fechar', 'kg-btn--outline', reiniciar));
+      e.acoes.appendChild(botao('Fechar', 'vm-btn--outline', reiniciar));
       fechoAutomaticoTimer = setTimeout(reiniciar, 2500);
     }
   }
@@ -121,7 +141,7 @@
 
   function pedir(url, corpo) {
     const dados = new FormData();
-    dados.set('csrf_token', csrfToken);
+    dados.set('_token', csrfToken);
     Object.entries(corpo || {}).forEach(([k, v]) => dados.set(k, v));
     return fetch(url, { method: 'POST', body: dados }).then(async (resp) => {
       const json = await resp.json().catch(() => ({}));
@@ -147,7 +167,7 @@
 
   function enviarSinal(tipo, payload) {
     if (chamadaAtualId == null) return;
-    pedir('/api/chamada/sinalizar.php', { chamada_id: chamadaAtualId, tipo, payload });
+    pedir('/api/chamada/sinalizar', { chamada_id: chamadaAtualId, tipo, payload });
   }
 
   function iniciarPollSinais() {
@@ -160,7 +180,7 @@
     if (chamadaAtualId == null || !pc) return;
     let resp;
     try {
-      resp = await fetch(`/api/chamada/sinais.php?chamada_id=${chamadaAtualId}&desde_id=${ultimoSinalId}`, { credentials: 'same-origin' });
+      resp = await fetch(`/api/chamada/sinais?chamada_id=${chamadaAtualId}&desde_id=${ultimoSinalId}`, { credentials: 'same-origin' });
     } catch (e) { return; }
     if (!resp.ok) return;
     const json = await resp.json().catch(() => null);
@@ -188,9 +208,16 @@
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
-      return; // sem microfone/permissão — chamada visual continua sem áudio
+      semAudio(e); // a chamada visual continua; o porquê fica escrito no modal
+      return;
     }
-    if (estado !== 'a_chamar' || chamadaAtualId == null) { pararAudio(); return; } // desligou entretanto
+    // A guarda é sobre a chamada ter morrido entretanto, não sobre continuar
+    // 'a_chamar': o outro lado pode atender enquanto o browser ainda está a
+    // pedir o microfone (na primeira vez é um diálogo que demora segundos).
+    // Aí verificarAgora() já pôs o estado em 'ativa' e abortar aqui deixava a
+    // chamada ligada mas sem oferta nenhuma — muda dos dois lados, para
+    // sempre, porque nada volta a disparar a negociação.
+    if ((estado !== 'a_chamar' && estado !== 'ativa') || chamadaAtualId == null) { pararAudio(); return; }
     pc = criarPeerConnection();
     localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
     const offer = await pc.createOffer();
@@ -204,12 +231,32 @@
     try {
       localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
+      semAudio(e);
       return;
     }
     if (estado !== 'ativa' || chamadaAtualId == null) { pararAudio(); return; }
     pc = criarPeerConnection();
     localStream.getTracks().forEach((t) => pc.addTrack(t, localStream));
     iniciarPollSinais(); // a oferta do outro lado chega por aqui e é respondida em processarSinais()
+    renderizar();
+  }
+
+  // Sem isto, todas as maneiras de o áudio falhar davam exatamente o mesmo
+  // ecrã ("Em chamada com X") e nenhum som — nada distinguia uma permissão
+  // recusada de uma página servida em http://, que é o caso mais comum a
+  // testar entre dois telemóveis: fora de um contexto seguro o browser nem
+  // sequer expõe navigator.mediaDevices, e o pedido rebenta antes de chegar
+  // ao utilizador.
+  function semAudio(erro) {
+    if (!navigator.mediaDevices) {
+      motivoSemAudio = 'Sem áudio: abre a app em https:// (ou localhost). Fora daí o browser bloqueia o microfone.';
+    } else if (erro && erro.name === 'NotAllowedError') {
+      motivoSemAudio = 'Sem áudio: permissão do microfone recusada.';
+    } else if (erro && erro.name === 'NotFoundError') {
+      motivoSemAudio = 'Sem áudio: nenhum microfone encontrado.';
+    } else {
+      motivoSemAudio = 'Sem áudio: não foi possível abrir o microfone.';
+    }
     renderizar();
   }
 
@@ -225,6 +272,7 @@
     sinalPollTimer = null;
     ultimoSinalId = 0;
     microfoneSilenciado = false;
+    motivoSemAudio = '';
     if (localStream) {
       localStream.getTracks().forEach((t) => t.stop());
       localStream = null;
@@ -237,11 +285,46 @@
     if (audioEl) audioEl.srcObject = null;
   }
 
+  // ---- Prova de vida --------------------------------------------------
+
+  // O /desligar é um clique, e um refresh ou um separador fechado a meio da
+  // chamada nunca o manda: a linha ficava 'atendida' na BD para sempre e os
+  // dois participantes passavam a apanhar 'ocupado' em todas as chamadas
+  // seguintes. Enquanto a chamada está viva este pulso di-lo ao servidor;
+  // quando pára, ChamadaService::expirarChamadasParadas() fecha-a.
+  function iniciarPulso() {
+    clearInterval(pulsoTimer);
+    pulsoTimer = setInterval(() => {
+      if (estado !== 'ativa' || chamadaAtualId == null) return;
+      pedir('/api/chamada/pulso', { chamada_id: chamadaAtualId });
+    }, INTERVALO_PULSO_MS);
+  }
+
+  function pararPulso() {
+    clearInterval(pulsoTimer);
+    pulsoTimer = null;
+  }
+
+  // Caminho rápido para o caso comum (refresh, fechar o separador, navegar
+  // para outra página): sendBeacon porque um fetch normal é cancelado com a
+  // página. Assim o outro lado vê logo "Chamada terminada" em vez de esperar
+  // pelo timeout do pulso.
+  function desligarAoSair() {
+    if (chamadaAtualId == null) return;
+    if (estado !== 'a_chamar' && estado !== 'a_receber' && estado !== 'ativa') return;
+    if (!navigator.sendBeacon) return;
+    const dados = new FormData();
+    dados.set('_token', csrfToken);
+    dados.set('chamada_id', chamadaAtualId);
+    navigator.sendBeacon('/api/chamada/desligar', dados);
+  }
+
   // ---- Estado da chamada ---------------------------------------------
 
   function reiniciar() {
     clearTimeout(fechoAutomaticoTimer);
     KGSons.pararToqueIncoming();
+    pararPulso();
     pararAudio();
     estado = 'inativa';
     chamadaAtualId = null;
@@ -254,6 +337,7 @@
   function mostrarTerminada(mensagem) {
     KGSons.pararToqueIncoming();
     KGSons.tocarEnded();
+    pararPulso();
     pararAudio();
     estado = 'terminada';
     mensagemTerminada = mensagem;
@@ -263,7 +347,7 @@
 
   async function iniciar(paraId, paraNome) {
     if (meuId == null || paraId == null || estado !== 'inativa') return;
-    const { ok, json } = await pedir('/api/chamada/iniciar.php', { destinatario_id: paraId });
+    const { ok, json } = await pedir('/api/chamada/iniciar', { destinatario_id: paraId });
     if (!ok) {
       alert(json.erro === 'ocupado' ? `${paraNome} está ocupado(a) noutra chamada.` : (json.erro || 'Não foi possível ligar.'));
       return;
@@ -280,10 +364,11 @@
 
   async function atender() {
     if (estado !== 'a_receber' || chamadaAtualId == null) return;
-    const { ok } = await pedir('/api/chamada/responder.php', { chamada_id: chamadaAtualId, acao: 'atender' });
+    const { ok } = await pedir('/api/chamada/responder', { chamada_id: chamadaAtualId, acao: 'atender' });
     if (!ok) return;
     KGSons.pararToqueIncoming();
     estado = 'ativa';
+    iniciarPulso();
     renderizar();
     sinalizarEstado('chamada:atender');
     atenderAudio();
@@ -291,14 +376,14 @@
 
   async function recusar() {
     if (estado !== 'a_receber' || chamadaAtualId == null) return;
-    await pedir('/api/chamada/responder.php', { chamada_id: chamadaAtualId, acao: 'recusar' });
+    await pedir('/api/chamada/responder', { chamada_id: chamadaAtualId, acao: 'recusar' });
     sinalizarEstado('chamada:recusar');
     reiniciar();
   }
 
   async function desligar() {
     if ((estado !== 'a_chamar' && estado !== 'ativa') || chamadaAtualId == null) return;
-    await pedir('/api/chamada/desligar.php', { chamada_id: chamadaAtualId });
+    await pedir('/api/chamada/desligar', { chamada_id: chamadaAtualId });
     sinalizarEstado('chamada:desligar');
     reiniciar();
   }
@@ -311,7 +396,7 @@
     if (meuId == null) return;
     let resp;
     try {
-      resp = await fetch('/api/chamada/verificar.php', { credentials: 'same-origin' });
+      resp = await fetch('/api/chamada/verificar', { credentials: 'same-origin' });
     } catch (e) { return; }
     if (!resp.ok) return;
     const json = await resp.json().catch(() => null);
@@ -321,6 +406,7 @@
     if (chamada.id === chamadaAtualId) {
       if (chamada.estado === 'atendida' && estado === 'a_chamar') {
         estado = 'ativa';
+        iniciarPulso();
         renderizar();
       } else if (chamada.estado === 'recusada' && estado === 'a_chamar') {
         mostrarTerminada(`Chamada recusada por ${outroNome}`);
@@ -349,6 +435,7 @@
     verificarAgora();
     clearInterval(pollTimer);
     pollTimer = setInterval(verificarAgora, INTERVALO_POLL_MS);
+    window.addEventListener('pagehide', desligarAoSair);
 
     if (rt) {
       ['chamada:iniciar', 'chamada:atender', 'chamada:recusar', 'chamada:desligar'].forEach((evento) => {
